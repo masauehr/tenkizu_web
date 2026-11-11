@@ -442,7 +442,13 @@
   $("cmpChk").onchange = (e) => setCmp(e.target.checked);
   $("btnSwap").onclick = swapModels;
 
+  // 使い方（ヘルプ）
+  const toggleHelp = (on) => { $("help").hidden = on === undefined ? !$("help").hidden : !on; };
+  $("btnHelp").onclick = () => toggleHelp();
+  $("btnHelpClose").onclick = () => toggleHelp(false);
+
   window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !$("help").hidden) { toggleHelp(false); return; }
     if (!S.manifest || e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return;
     const charts = chartsAvail(S.region);
     const ci = charts.indexOf(S.chart);
@@ -454,6 +460,7 @@
     else if (e.key === "Home") setIndex(0);
     else if (e.key === "End") setIndex(fts().length - 1);
     else if (e.key === "c" || e.key === "C") setCmp(!S.cmp);
+    else if (e.key === "h" || e.key === "H") toggleHelp();
     else return;
     e.preventDefault();
   });
