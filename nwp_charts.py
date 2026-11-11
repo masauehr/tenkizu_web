@@ -51,6 +51,9 @@ REGIONS = {
     # 鉛直断面図（専用の描画・固定断面。xsection.SECTIONS）。図種側で regions=("xsec",) を指定する
     "xsec": dict(label="鉛直断面", kind="special", center=(135.0, 35.0), bbox=(100, 180, 0, 70),
                  barb_n=0, coast="50m", zoom=1),
+    # エマグラム（専用の描画・固定地点。emagram.STATIONS）。図種側で regions=("emagram",) を指定する
+    "emagram": dict(label="エマグラム", kind="special", center=(135.0, 35.0), bbox=(100, 180, 0, 70),
+                    barb_n=0, coast="50m", zoom=1),
     # GSM 日本域 0.125°（Rjp, 3時間毎）。データ範囲は 120-150E, 20-50N。**GSM（ローカル専用）だけ**が持つ地域
     "japan3": dict(label="日本域（0.125°・3時間毎）", kind="lcc", center=(135.0, 36.0), width_km=2700,
                    bbox=(120, 150, 20, 50), barb_n=20, coast="10m", zoom=1, src="rjp", models=("gsm",)),
@@ -568,6 +571,8 @@ CHARTS = {
     "polar500": dict(label="北半球 500hPa（高度・気温・風速）", polar=True, level=500, temp=True, levels=[500], regions=("polar",)),
     "xs130": dict(label="断面 130E（南北・45N→25N）", xsection="ns130", regions=("xsec",)),
     "xs140": dict(label="断面 140E（南北・45N→25N）", xsection="ns140", regions=("xsec",)),
+    **{f"em_{sid}": dict(label=f"エマグラム {nm}", emagram=sid, regions=("emagram",))
+       for sid, (nm, _la, _lo) in __import__("emagram").STATIONS.items()},
     "surffax": dict(label="地上FAX（気圧・2m気温・10m風）", fn=chart_surffax, regions=("japan",)),
 }
 
@@ -622,6 +627,11 @@ def render_chart(chart, region, F, init, ft, outpath, model="", quantize=True):
         import xsection
         name, st, en = xsection.SECTIONS[CHARTS[chart]["xsection"]]
         return xsection.render_xsection(F, init, ft, st, en, outpath, model=model, name=name, quantize=quantize)
+    if CHARTS[chart].get("emagram"):
+        import emagram
+        nm, la, lo = emagram.STATIONS[CHARTS[chart]["emagram"]]
+        emagram.render_emagram(F, init, ft, la, lo, outpath, model=model, name=nm, quantize=quantize)
+        return
     if CHARTS[chart].get("polar"):
         return render_polar(chart, F, init, ft, outpath, model=model, quantize=quantize)
     proj, extent = make_projection(region)

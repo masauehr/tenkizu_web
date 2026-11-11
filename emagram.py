@@ -1,0 +1,158 @@
+#!/usr/bin/env python
+# coding: utf-8
+"""エマグラム（気温・露点・持ち上げ気塊・CAPE/CIN・ホドグラフ）。
+
+tenkizu の GRIB2_Emagram.py の描画内容を、格子データ F（nwp_data.load_fields の形式）から作る。
+最寄りの格子点の鉛直プロファイルを取り出し、log(気圧) で細かい層に補間してから描く
+（取得している気圧面は 975/925/850/700/500/300/200hPa と少なく、そのままでは CAPE が粗いため）。
+公開用は主要ゾンデ地点の固定（STATIONS）、ローカルは任意の緯度経度。
+"""
+import numpy as np
+import matplotlib.pyplot as plt
+from datetime import timedelta
+
+# 公開用の固定地点（高層気象観測所）。(表示名, 緯度, 経度)。座標は観測所のおおよその位置
+STATIONS = {
+    "47401": ("稚内", 45.42, 141.68),
+    "47646": ("館野（つくば）", 36.06, 140.13),
+    "47778": ("潮岬", 33.45, 135.76),
+    "47807": ("福岡", 33.58, 130.38),
+    "47936": ("那覇", 26.21, 127.69),
+}
+
+JP_FONT = ["Hiragino Sans", "Arial Unicode MS", "DejaVu Sans"]
+
+
+def _dewpoint(t_c, rh):
+    rh = np.clip(rh, 1.0, 100.0)
+    a, b = 17.62, 243.12
+    g = np.log(rh / 100.0) + a * t_c / (b + t_c)
+    return b * g / (a - g)
+
+
+def nearest(F, lat, lon):
+    """最寄りの格子点の (iy, ix) と、その緯度・経度。"""
+    lats, lons = F["lats"], F["lons"]
+    iy = int(np.abs(lats - lat).argmin())
+    ix = int(np.abs(lons - (lon % 360.0)).argmin())
+    return iy, ix, float(lats[iy]), float(lons[ix])
+
+
+def profile_from_F(F, lat, lon):
+    """最寄り格子点のプロファイル（地面より上の気圧面だけ）。p[hPa] 下→上、T/Td[℃]、u/v[m/s]、h[m]。"""
+    iy, ix, glat, glon = nearest(F, lat, lon)
+    sp = float(F["sp"][iy, ix])
+    rows = []
+    for lv in sorted(F["p"], reverse=True):
+        if lv > sp:
+            continue                      # 地面より下の層は使わない
+        d = F["p"][lv]
+        t = float(d["t"][iy, ix])
+        td = min(float(_dewpoint(t, float(d["r"][iy, ix]))), t)
+        rows.append((lv, t, td, float(d["u"][iy, ix]), float(d["v"][iy, ix]), float(d["gh"][iy, ix])))
+    if len(rows) < 3:
+        raise ValueError("地面より上の気圧面が3層未満です（高い山の上など）")
+    a = np.array(rows)
+    return dict(p=a[:, 0], T=a[:, 1], Td=a[:, 2], u=a[:, 3], v=a[:, 4], h=a[:, 5],
+                sp=sp, grid_lat=glat, grid_lon=glon)
+
+
+def refine(prof, step=10.0):
+    """log(気圧) で線形補間した細かい層（診断・曲線用）。下端は最下層、上端は最上層。"""
+    p = prof["p"]
+    pf = np.arange(p[0], p[-1] - 0.5, -step)
+    lp, lpf = np.log(p)[::-1], np.log(pf)[::-1]
+    out = {"p": pf}
+    for k in ("T", "Td", "u", "v"):
+        out[k] = np.interp(lpf, lp, prof[k][::-1])[::-1]
+    return out
+
+
+def diagnostics(fine):
+    """最大相当温位の層（850hPa以下）から持ち上げた気塊の LCL・EL・CAPE・CIN。"""
+    import metpy.calc as mpcalc
+    from metpy.units import units
+    p, T, Td = fine["p"] * units.hPa, fine["T"] * units.degC, fine["Td"] * units.degC
+    low = np.where(fine["p"] >= 850.0)[0]
+    if low.size == 0:
+        low = np.array([0])
+    ept = mpcalc.equivalent_potential_temperature(p[low], T[low], Td[low])
+    i0 = int(low[int(np.nanargmax(ept.magnitude))])
+    pe, te, tde = p[i0:], T[i0:], Td[i0:]
+    prof = mpcalc.parcel_profile(pe, T[i0], Td[i0]).to("degC")
+    lcl_p, lcl_t = mpcalc.lcl(p[i0], T[i0], Td[i0])
+    try:
+        el_p, el_t = mpcalc.el(pe, te, tde, prof)
+    except Exception:
+        el_p = el_t = None
+    cape, cin = mpcalc.cape_cin(pe, te, tde, prof, which_lfc="bottom", which_el="top")
+    return dict(i0=i0, parcel=prof, pe=pe, te=te, lcl_p=lcl_p, lcl_t=lcl_t, el_p=el_p, el_t=el_t,
+                cape=float(cape.magnitude), cin=float(cin.magnitude))
+
+
+def render_emagram(F, init, ft, lat, lon, outpath, model="", name="", quantize=True):
+    """エマグラムを1枚描画して outpath へ保存する。"""
+    import nwp_charts as nc
+    from metpy.plots import Hodograph, SkewT
+    from metpy.units import units
+    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+    prof = profile_from_F(F, lat, lon)
+    fine = refine(prof)
+    dg = diagnostics(fine)
+    W, H = 9.5, 7.6
+    fig = plt.figure(figsize=(W, H), dpi=nc.DPI)
+    fig.subplots_adjust(top=0.90, bottom=0.115, left=0.09, right=0.95)
+    skew = SkewT(fig, rotation=0, aspect=120)
+    skew.ax.set_xlim(-70, 40)
+    skew.ax.set_ylim(1000, 200)
+    skew.ax.set_xlabel("Temperature (°C)")
+    skew.ax.set_ylabel("Pressure (hPa)")
+    p, T, Td = fine["p"] * units.hPa, fine["T"] * units.degC, fine["Td"] * units.degC
+
+    skew.plot_dry_adiabats(t0=np.arange(203, 533, 10) * units.K, alpha=0.25, color="orangered")
+    skew.plot_moist_adiabats(t0=np.arange(203, 400, 5) * units.K, alpha=0.25, color="tab:green")
+    skew.plot_mixing_lines(pressure=np.arange(1000, 199, -20) * units.hPa, linestyle="dotted", color="tab:blue")
+    skew.plot(p, T, "r", linewidth=1.8, label="気温")
+    skew.plot(p, Td, "g", linewidth=1.8, label="露点温度")
+    skew.plot(dg["pe"], dg["parcel"], "k", linewidth=2, alpha=0.55, label="持ち上げ気塊")
+    skew.plot(p[dg["i0"]], T[dg["i0"]], "ko", markerfacecolor="black")
+    skew.plot(dg["lcl_p"], dg["lcl_t"], "ko", markerfacecolor="blue")
+    if dg["el_p"] is not None and np.isfinite(dg["el_p"].magnitude):
+        skew.plot(dg["el_p"], dg["el_t"], "ko", markerfacecolor="red")
+    if dg["cape"] > 0:                    # 自由対流高度が無い（安定）場合は CIN の塗りが広範囲になり誤解を招くので塗らない
+        try:
+            skew.shade_cin(dg["pe"], dg["te"], dg["parcel"])
+            skew.shade_cape(dg["pe"], dg["te"], dg["parcel"])
+        except Exception:
+            pass
+    # 風矢羽は取得している気圧面のところだけ（kt）
+    skew.plot_barbs(prof["p"] * units.hPa, (prof["u"] * nc.KT) * units.knots, (prof["v"] * nc.KT) * units.knots,
+                    y_clip_radius=0.03)
+    skew.ax.legend(loc="lower left", bbox_to_anchor=(0.02, 0.17), fontsize=8, framealpha=0.85,
+                   prop={"family": JP_FONT, "size": 8})
+
+    ia = inset_axes(skew.ax, "34%", "34%", loc=1)
+    hod = Hodograph(ia, component_range=80.0)
+    hod.add_grid(increment=20)
+    hod.plot_colormapped(prof["u"] * units("m/s"), prof["v"] * units("m/s"), prof["h"] * units.m)
+
+    skew.ax.text(0.02, 0.02,
+                 f"Parcel start: {fine['p'][dg['i0']]:.0f} hPa\nLCL: {dg['lcl_p'].magnitude:.0f} hPa\n"
+                 f"CAPE: {dg['cape']:.0f} J/kg\nCIN: {dg['cin']:.0f} J/kg",
+                 transform=skew.ax.transAxes, fontsize=8, va="bottom", ha="left",
+                 bbox={"boxstyle": "round,pad=0.3", "fc": "white", "alpha": 0.8})
+
+    valid = init + timedelta(hours=ft)
+    fig.text(0.09, 0.955, name or f"{lat:.2f}N {lon:.2f}E", fontsize=13, family=JP_FONT, va="center")
+    fig.text(0.95, 0.955, f"{valid:%m/%d %H}UTC", fontsize=13, family="serif", color="#5a3410",
+             va="center", ha="right")
+    fig.text(0.09, 0.915, f"要求 {lat:.2f}N {lon:.2f}E / 格子 {prof['grid_lat']:.2f}N {prof['grid_lon']:.2f}E"
+             f"（地表気圧 {prof['sp']:.0f}hPa）", fontsize=8, family=JP_FONT, va="center")
+    fig.text(0.006, 0.012, f"{model} INIT:{init:%m/%d %H:%M}(UTC)".strip(), fontsize=9, va="bottom")
+    nc._caption(fig, [(f"{init:%d%H}", "#1010e0", 16), (f"<{ft}>", "#d020d0", 16),
+                      ("Emagram", "#7a5a30", 16)], y=0.045, fw=W, fh=H)
+    fig.savefig(outpath, dpi=nc.DPI)
+    plt.close(fig)
+    if quantize:
+        nc._quantize_png(outpath)
+    return dict(cape=dg["cape"], cin=dg["cin"])

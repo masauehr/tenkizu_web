@@ -8,7 +8,9 @@ import nwp_charts as nc
 
 def test_charts_are_new_only():
     # nwp_chart_web と重複する図種を持たない
-    assert set(nc.CHARTS) == {"instab", "fax57", "fax78", "qvec850", "polar300", "polar500", "surffax", "xs130", "xs140"}
+    import emagram
+    base = {"instab", "fax57", "fax78", "qvec850", "polar300", "polar500", "surffax", "xs130", "xs140"}
+    assert set(nc.CHARTS) == base | {f"em_{k}" for k in emagram.STATIONS}
 
 
 def test_passes_scale_with_grid():
@@ -33,3 +35,20 @@ def test_xsection_path_and_components():
     v = np.zeros_like(u)
     d = xsection.divergence(u, v, lats, lons)
     assert abs(d[60, 60]) < 1e-12            # 一様な東風は発散ゼロ
+
+
+def test_emagram_profile_and_refine():
+    import emagram
+    lats = np.arange(20, 50.1, 1.0)
+    lons = np.arange(120, 150.1, 1.0)
+    shape = (len(lats), len(lons))
+    p = {}
+    for lv, t in ((925, 15.0), (850, 10.0), (700, 0.0), (500, -20.0), (300, -45.0)):
+        p[lv] = dict(t=np.full(shape, t), r=np.full(shape, 60.0), u=np.full(shape, 10.0),
+                     v=np.zeros(shape), gh=np.full(shape, 1000.0))
+    F = dict(lats=lats, lons=lons, sp=np.full(shape, 880.0), p=p)    # 925hPaは地面より下
+    prof = emagram.profile_from_F(F, 35.2, 135.1)
+    assert list(prof["p"]) == [850, 700, 500, 300]                    # 地面より下の層は除く
+    assert prof["grid_lat"] == 35.0 and prof["grid_lon"] == 135.0
+    fine = emagram.refine(prof)
+    assert fine["p"][0] == 850 and fine["p"][-1] >= 300 and len(fine["p"]) > 40
