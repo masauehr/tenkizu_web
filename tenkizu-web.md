@@ -80,7 +80,7 @@ tenkizu（CLI で描いていた天気図・断面図・エマグラム）を、
 | ディスクの空き | 20GB 未満で警告、5GB 未満で**自由選択の新しい取得を止める** | 通知・取得停止 |
 
 - 取得の直前（自由選択）に自動で整理し、作図後に画像も整理する。自由選択のページの下部に、使用量と上限が出る（上限超過・空き不足は赤）。
-- 通知は macOS の通知センター。同じ内容は24時間に1回まで。launchd `com.masahiro.tenkizu_web_disk`（6時間おき）で `disk_guard.py --prune --notify` を実行する（登録手順は PUBLISH.md）。
+- 通知は macOS の通知センター。同じ内容は24時間に1回まで。launchd `com.masahiro.tenkizu_web_disk`（**6時間おき・2026-11-11 登録済み**）が `disk_guard.py --prune --notify` を実行する。ログは `logs/disk_guard.log`。登録手順・止め方は PUBLISH.md。
 - 上限を変えるには、プロジェクト直下に `disk_limits.json` を作る（無ければ既定値）。例: `{"grib_gb": 5, "custom_mb": 300, "free_warn_gb": 30}`。キーは `grib_gb`・`custom_mb`・`gsm_gb`・`output_gb`・`free_warn_gb`・`free_min_gb`。
 - 手動の確認・整理: `python disk_guard.py`（表示だけ）、`python disk_guard.py --prune`（上限超過分を削除）、`python disk_guard.py --test-notify`（通知が出るかの確認）。
 
@@ -129,6 +129,7 @@ tenkizu（CLI で描いていた天気図・断面図・エマグラム）を、
 |---|---|
 | 2026-11-11 | 新規作成。nwp_chart_web の枠組みを移植し、新規図（Qベクトル・不安定域・FAX57/78・地上FAX・北半球極座標）、固定鉛直断面（130E・140E）、固定エマグラム5地点を実装。ローカルの自由選択（地図クリック）、気圧面を13層に拡張、GitHub Pages で公開開始、ローカル定期更新（launchd）を登録 |
 | 2026-11-11 | 公開後の修正: ECMWF の経度（−180〜180）の正規化、cartopy 0.26 の極座標範囲、日本語フォント、画用紙版の保存キー分離 |
+| 2026-11-11 | ディスク使用量チェックの launchd（`com.masahiro.tenkizu_web_disk`・6時間おき）を登録 |
 | 2026-11-11 | ローカルサーバーの既定ポートを 8791 に変更（nwp_chart_web の 8790 と同時に動かせる）。ディスク使用量の制限・通知（`disk_guard.py`・自由選択ページの表示・launchd 雛形）を追加 |
 | 2026-11-11 | nwp_chart_web 由来の古い記述を整理（画用紙版ヘルプの刻み・更新の表、AIFS・JRA-55・GSM 0.125°域の処理。GSM の定期取得で余分な Rjp ファイルを取らなくなった） |
 | 2026-11-11 | 通常版にヘルプ（使い方・図の読み方・更新時刻の目安。ボタンと H キー）を追加 |

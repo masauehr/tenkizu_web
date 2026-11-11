@@ -32,4 +32,4 @@ tenkizu の CLI 作図（天気図・断面図・エマグラム）を Web で�
 
 ## 定期処理（登録済み）
 - GitHub Actions `update-model`: UTC 17〜23時の :30（12Z初期値の時間帯）。`deploy-web`: `web/**` の push で画面だけ反映。
-- launchd: `com.masahiro.tenkizu_web_sync`（30分おき）、`com.masahiro.tenkizu_web_gsm`（1時間おきに確認・00/12Z）、`com.masahiro.tenkizu_web_disk`（6時間おき・ディスク制限と通知。登録はユーザーの確認後）。止める: `launchctl bootout gui/$(id -u)/<Label>`。
+- launchd: `com.masahiro.tenkizu_web_sync`（30分おき）、`com.masahiro.tenkizu_web_gsm`（1時間おきに確認・00/12Z）、`com.masahiro.tenkizu_web_disk`（6時間おき・ディスク制限と通知。2026-11-11 登録済み。ログ `logs/disk_guard.log`）。止める: `launchctl bootout gui/$(id -u)/<Label>`。

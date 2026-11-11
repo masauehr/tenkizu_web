@@ -35,11 +35,11 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.masahiro.tenkizu_web
 - gsm: GSM（ローカル専用）を 00/12Z だけ取得・作図（初回は約600MB・十数分）。3日より古いものは削除。ログ `logs/gsm_auto.log`。
 - nwp_chart_web の GSM 取得と別々に動く（GSM のデータは重複して保管される。必要なら片方を止める）。
 
-## ディスク使用量のチェック（launchd・任意）
+## ディスク使用量のチェック（launchd・2026-11-11 登録済み）
 自由選択で取得したデータが増え続けないよう、6時間おきに上限超過分を古い順に削除し、超過・空き不足を通知する。
 ```bash
 cp launchd/com.masahiro.tenkizu_web_disk.plist ~/Library/LaunchAgents/
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.masahiro.tenkizu_web_disk.plist
 # 止める: launchctl bootout gui/$(id -u)/com.masahiro.tenkizu_web_disk
 ```
-ログは `logs/disk_guard.log`。上限・通知の詳細はマニュアル（tenkizu-web.md）の「ディスク使用量の制限と通知」。登録しなくても、自由選択の取得の直前と作図後の整理は動く（定期チェックと通知だけが止まる）。
+ログは `logs/disk_guard.log`。上限・通知の詳細はマニュアル（tenkizu-web.md）の「ディスク使用量の制限と通知」。登録していない環境でも、自由選択の取得の直前と作図後の整理は動く（定期チェックと通知だけが止まる）。
