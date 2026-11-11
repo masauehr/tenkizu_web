@@ -361,7 +361,8 @@
   }
   function capCustom() {
     const c = customFind(S.chart2);
-    return c ? `<b>自由選択（断面図・エマグラム）</b> ｜ ${esc(c.label)} ｜ ${esc(c.model)} 初期値 ${esc(c.initText)} ＋${c.ft}h（作図済みの画像。予報時間とは連動しません）`
+    const name = S.local ? "自由選択（断面図・エマグラム）" : "保存された断面図・エマグラム";   // 公開サイトでは新しく作れないので「自由選択」とは出さない
+    return c ? `<b>${name}</b> ｜ ${esc(c.label)} ｜ ${esc(c.model)} 初期値 ${esc(c.initText)} ＋${c.ft}h（作図済みの画像。予報時間とは連動しません）`
              : "<b>自由選択（断面図・エマグラム）</b> ｜ 未作図";
   }
 
