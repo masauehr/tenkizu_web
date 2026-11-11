@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>数値モデル天気図ビューア</title>
+<title>tenkizu_web 天気図・断面図・エマグラム</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -25,10 +25,9 @@
   </label>
   <div id="regionBtns" class="seg" role="group" aria-label="地域"></div>
   <button id="btnUpdate" title="RISHから最新データを取得して作図します">最新を取得</button>
-  <button id="btnSync" title="公開サイトで作られた最新の画像を、手元へ取り込みます（GFS・AIFS・ECMWF）">同期</button>
-  <button id="btnPast" title="GSM・JRA-55の過去の初期値を取得して作図します／取得済みの一覧と削除（ローカルのみ）">過去分取得</button>
   <span id="updateMsg"></span>
   <a href="board/" title="複数の図を並べて表示">画用紙版</a>
+  <a href="custom.html" id="lnkCustom" hidden title="任意の断面線・地点で断面図／エマグラムを作る（ローカルのみ）">自由選択</a>
   <span id="updated"></span>
 </header>
 
@@ -87,33 +86,14 @@
       <tbody>
 <tr><td>ECMWF</td><td><b>00 / 12 / 18</b></td><td>00Z 7:20〜10:20 ／ 12Z 19:40〜23:25 ／ 18Z 翌0:30〜3:35</td></tr>
 <tr><td>GFS</td><td>00 / 12</td><td>00Z 4:00〜6:15 ／ 12Z 16:15〜18:00</td></tr>
-<tr><td>AIFS</td><td>00 / 12</td><td>00Z 5:20〜6:50 ／ 12Z 17:30〜21:00</td></tr>
       </tbody>
     </table>
-    <p>ECMWF だけ <b>18Z も</b>載せます（06Z は取りません）。GFS・AIFS は 00/12Z のみ（公開容量の都合）。公開サイトは各モデル約2日分です。時刻はすべて UTC（JST は +9時間）。</p>
-    <p>自動更新は、揃ってから次の定期起動（1日22回）で作図が始まり、<b>揃ってから見えるまで通常30分〜1時間強</b>です。ローカルの GSM（00/12Z）と JRA-55（過去分を「過去分取得」で取得）は公開されません。</p>
+    <p>ECMWF だけ <b>18Z も</b>載せます（06Z は取りません）。GFS は 00/12Z のみ（公開容量の都合）。公開サイトは各モデル約2日分です。時刻はすべて UTC（JST は +9時間）。</p>
+    <p>自動更新は、揃ってから次の定期起動で作図が始まります。ローカルの GSM は公開されません。</p>
   </details>
   <section id="legal" aria-label="出典・ライセンス・免責"></section>
   <p>作図: 本アプリ（元データを加工して描画した図）。ショートカット: ←→ 予報時間、↑↓ 図種、Space 再生、C 2モデル比較の切替</p>
 </footer>
-<!-- 過去の初期値（GSM・JRA-55）: 取得・作図と、取得済みデータの一覧・削除（ローカルサーバーのときだけ使える） -->
-<dialog id="pastDlg">
-  <h2>過去の初期値の取得（ローカルのみ）</h2>
-  <p class="note" id="pastNoteGsm">京大RISHのGSMアーカイブから、過去の初期値を取得して作図します。手動で取得した初期値は<strong>自動では削除されません</strong>（容量は 72時間で約0.6GB）。不要になったら、下の一覧から削除してください。</p>
-  <p class="note" id="pastNoteJra" hidden>JRA-55（気象庁の再解析・1.25°・1958〜2023年）を京大RISHから取得して作図します。<strong>指定した時刻から○日分（6時間毎）を1つの系列</strong>として取得し、画面の「初期値」＝開始時刻、予報時間のスライダー（再生も可）＝開始からの経過時間として動かせます。アジア域と日本域のみ。雲量・降水が無いので、天気図は作らず、地上図は気圧と風だけです。必要な時刻・気圧面だけを読むので、1日分で約30MB・約2〜3分（日数が増えるほど時間と容量が増えます）。</p>
-  <div class="pastRow">
-    <label>モデル <select id="pastModel"><option value="gsm">JMA GSM</option><option value="jra55">JRA-55（再解析）</option></select></label>
-    <label>日付（UTC） <input type="date" id="pastDate"></label>
-    <label>時刻 <select id="pastHour"><option>00</option><option>06</option><option>12</option><option>18</option></select> UTC</label>
-    <label id="pastFtBox">予報時間 <select id="pastFt"></select></label>
-    <label id="pastDaysBox" hidden>日数 <select id="pastDays"></select></label>
-    <button id="pastGo">取得して作図</button>
-  </div>
-  <div id="pastMsg" class="note"></div>
-  <table id="pastTbl"><thead><tr><th id="pastInitHead">初期値（UTC）</th><th id="pastHead">GRIB2</th><th>画像</th><th id="pastHeadMan">手動</th><th>削除</th></tr></thead><tbody></tbody></table>
-  <p id="pastTotal" class="note"></p>
-  <div class="pastRow"><button id="pastClose">閉じる</button></div>
-</dialog>
 <script src="app.js"></script>
 </body>
 </html>

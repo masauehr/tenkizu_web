@@ -1,16 +1,14 @@
 #!/usr/bin/env python
 # coding: utf-8
-"""ECMWF/GFS天気図ビューア用の簡易サーバー（ローカル用。公開は build_site.py で作る静的サイトを使う）（標準ライブラリのみ）。
+"""tenkizu_web 用の簡易サーバー（ローカル用。公開は build_site.py で作る静的サイトを使う）（標準ライブラリのみ）。
 
   /          → web/ の静的ファイル
   /output/   → output/（make_charts.py が作成したPNGとmanifest.json）
   POST /api/update  → 最新データを取得して作図（update_latest.py を裏で実行。ローカルからのみ）
-  POST /api/sync    → 公開サイトで作られた画像を手元へ取り込む（sync_public.py を裏で実行。ローカルからのみ）
   GET  /api/status  → 更新ジョブの状態とログ末尾
-  GET  /api/past/list     → GSM・JRA-55（ローカル専用）の初期値（有効時刻）ごとのデータ・画像の数と容量
-  POST /api/past/fetch    → 過去の初期値を取得して作図（本文 {"model":"gsm","init":"YYYYMMDDHH","max_ft":72}
-                            または {"model":"jra55","init":"YYYYMMDDHH","days":1}。past_gsm.py / past_jra55.py を裏で実行）
-  POST /api/past/delete   → 削除（本文 {"model":"gsm|jra55","init":"YYYYMMDDHH","png":false}。データだけ／png=trueで画像も）
+  GET  /api/custom  → 任意の断面線・地点で断面図／エマグラムを作る（custom.py。ローカルからのみ）
+                      ?kind=xsection&model=gfs&init=YYYYMMDDHH&ft=12&lat1=45&lon1=130&lat2=25&lon2=130
+                      ?kind=emagram&model=gfs&init=YYYYMMDDHH&ft=12&lat=26.2&lon=127.7
 
 使用例:
   python server.py                 # http://127.0.0.1:8790/
@@ -22,13 +20,16 @@ import json
 import subprocess
 import sys
 import threading
+from urllib.parse import parse_qs
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
+import custom  # noqa: E402  任意の断面線・地点の作図（ローカル専用）
 LOG_FILE = ROOT / "logs" / "update_ui.log"
+_custom_lock = threading.Lock()   # 作図は重いので同時に1つだけ（取得が入ると1分ほどかかる）
 
 # 画面の「最新を取得」ボタンから起動する更新ジョブの状態（サーバープロセス内で1つだけ）
 _job = {"proc": None, "started": None, "rc": None}
@@ -98,7 +99,27 @@ class Handler(SimpleHTTPRequestHandler):
             if self._local_only():
                 self._json(200, job_status())
             return
+        if path == "/api/custom":
+            self._custom()
+            return
         super().do_GET()
+
+    def _custom(self):
+        """/api/custom?kind=xsection|emagram&model=..&init=YYYYMMDDHH&ft=..&lat1=..&lon1=..&lat2=..&lon2=..（emagram は lat,lon）"""
+        if not self._local_only():
+            return
+        q = {k: v[0] for k, v in parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "").items()}
+        try:
+            p = custom.validate(q.get("kind"), q.get("model"), q.get("init"), q.get("ft"), q)
+            with _custom_lock:
+                out = custom.render(p)
+        except custom.CustomError as e:
+            self._json(400, {"error": str(e)})
+            return
+        except Exception as e:   # 作図の想定外エラーは内容を返す（ローカル専用なので詳細を出してよい）
+            self._json(500, {"error": f"作図に失敗しました: {e!r}"})
+            return
+        self._json(200, {"url": "output/custom/" + out.name})
 
     def _body(self):
         """POSTの本文（JSON）。なければ空dict"""

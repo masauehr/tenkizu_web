@@ -652,15 +652,15 @@
     let j;
     try { j = await (await fetch(API + "status")).json(); } catch (e) {
       // 更新APIが無い（公開用の静的サイト）場合はボタンごと隠す
-      $("btnUpdate").hidden = true; $("btnSync").hidden = true; $("updateMsg").hidden = true; return;
+      $("btnUpdate").hidden = true; $("updateMsg").hidden = true; return;
     }
     const last = (j.log && j.log.length) ? j.log[j.log.length - 1] : "";
     if (j.running) {
-      $("btnUpdate").disabled = true; $("btnSync").disabled = true;
+      $("btnUpdate").disabled = true;
       $("updateMsg").textContent = "更新中…"; $("updateMsg").title = last;
       setTimeout(pollUpdate, 3000);
     } else {
-      $("btnUpdate").disabled = false; $("btnSync").disabled = false;
+      $("btnUpdate").disabled = false;
       if (j.rc === null || j.rc === undefined) { $("updateMsg").textContent = ""; return; }
       $("updateMsg").title = last;
       $("updateMsg").textContent = j.rc !== 0 ? "失敗（ログ確認）" : /変更はありません/.test(last) ? "変更なし" : "更新完了";
@@ -672,13 +672,6 @@
     $("btnUpdate").disabled = true;
     $("updateMsg").textContent = "更新を開始しています…";
     try { await fetch(API + "update", { method: "POST" }); } catch (e) { $("updateMsg").textContent = "開始できません"; $("btnUpdate").disabled = false; return; }
-    pollUpdate();
-  };
-
-  $("btnSync").onclick = async () => {
-    $("btnUpdate").disabled = true; $("btnSync").disabled = true;
-    $("updateMsg").textContent = "公開分の同期を開始しています…";
-    try { await fetch(API + "sync", { method: "POST" }); } catch (e) { $("updateMsg").textContent = "開始できません"; $("btnUpdate").disabled = false; $("btnSync").disabled = false; return; }
     pollUpdate();
   };
 

@@ -15,7 +15,6 @@
     <label>初期値 <select id="initSel"></select></label>
     <label title="既定では全ての図がこの範囲に揃います。図ごとに変える場合は各図の範囲欄で選びます">表示範囲(全体) <select id="regionSel"></select></label>
     <button id="btnUpdate" title="RISHから最新データを取得して作図します">最新を取得</button>
-    <button id="btnSync" title="公開サイトで作られた最新の画像を、手元へ取り込みます（GFS・AIFS・ECMWF）">同期</button>
     <span id="updateMsg"></span>
     <a href="../" title="通常版ビューア">通常版</a>
     <button id="btnHelp" title="操作説明 (H)">使い方</button>
@@ -67,10 +66,9 @@
   <table>
 <tr><th>ECMWF</th><td><b>00 / 12 / 18</b></td><td>00Z 7:20〜10:20 ／ 12Z 19:40〜23:25 ／ 18Z 翌0:30〜3:35</td></tr>
 <tr><th>GFS</th><td>00 / 12</td><td>00Z 4:00〜6:15 ／ 12Z 16:15〜18:00</td></tr>
-<tr><th>AIFS</th><td>00 / 12</td><td>00Z 5:20〜6:50 ／ 12Z 17:30〜21:00</td></tr>
   </table>
-  <p>ECMWF だけ <b>18Z も</b>載せます（06Z は取りません）。GFS・AIFS は 00/12Z のみ（公開容量の都合）。公開サイトは各モデル約2日分です。時刻はすべて UTC（JST は +9時間）。</p>
-  <p>自動更新は、揃ってから次の定期起動（1日22回）で作図が始まり、<b>揃ってから見えるまで通常30分〜1時間強</b>です。ローカルの GSM（00/12Z）と JRA-55（過去分を「過去分取得」で取得）は公開されません。</p>
+  <p>ECMWF だけ <b>18Z も</b>載せます（06Z は取りません）。GFS は 00/12Z のみ（公開容量の都合）。公開サイトは各モデル約2日分です。時刻はすべて UTC（JST は +9時間）。</p>
+  <p>自動更新は、揃ってから次の定期起動で作図が始まり、ローカルの GSM は公開されません。</p>
   <button id="btnHelpClose">閉じる</button>
 </div>
 <script src="board.js"></script>

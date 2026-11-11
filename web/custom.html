@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>断面図・エマグラム（自由選択）</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  [hidden] { display:none !important; }   /* .row の display:flex が hidden 属性に勝たないように */
+  #form { background:#fff; border:1px solid var(--line); padding:12px 16px; display:grid; gap:10px; }
+  #form .row { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; }
+  #form input[type=number] { width:90px; font:inherit; padding:4px 6px; border:1px solid var(--line); border-radius:6px; }
+  #form .presets button { margin:2px 4px 2px 0; font-size:12px; }
+  #msg { min-height:1.5em; color:#556; }
+  #msg.err { color:#c02020; }
+  #result img { display:block; max-width:100%; height:auto; border:1px solid var(--line); background:#fff; margin-top:10px; }
+  .note { color:#556; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>断面図・エマグラム（自由選択）</h1>
+  <a href="./">天気図に戻る</a>
+</header>
+<main>
+  <p class="note">ローカルサーバーだけで使えます。公開サイトでは固定の断面（130E・140E）と主要5地点のエマグラムだけを載せています。
+    データが手元に無い初期値・予報時間は、その場で取得するので<b>1分ほど</b>かかります（ECMWF・GFS。取得したデータは data/ に残ります）。GSM は手元にあるものだけ使えます。</p>
+  <div id="form">
+    <div class="row">
+      <label><input type="radio" name="kind" value="xsection" checked> 鉛直断面図</label>
+      <label><input type="radio" name="kind" value="emagram"> エマグラム</label>
+    </div>
+    <div class="row">
+      <label>モデル <select id="model"></select></label>
+      <label>初期値(UTC) <select id="init"></select></label>
+      <label>予報時間 <input type="number" id="ft" value="0" min="0" max="360" step="3"> h</label>
+    </div>
+    <div class="row" id="rowX">
+      <span>始点 緯度 <input type="number" id="lat1" value="45" step="0.5"> 経度 <input type="number" id="lon1" value="130" step="0.5"></span>
+      <span>終点 緯度 <input type="number" id="lat2" value="25" step="0.5"> 経度 <input type="number" id="lon2" value="130" step="0.5"></span>
+    </div>
+    <div class="row" id="rowE" hidden>
+      <span>緯度 <input type="number" id="lat" value="35.7" step="0.1"> 経度 <input type="number" id="lon" value="139.7" step="0.1"></span>
+    </div>
+    <div class="row presets" id="presets"></div>
+    <div class="row"><button id="go">作図</button><span id="msg"></span></div>
+  </div>
+  <div id="result"></div>
+</main>
+<script src="custom.js"></script>
+</body>
+</html>
