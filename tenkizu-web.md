@@ -55,18 +55,34 @@ tenkizu（CLI で描いていた天気図・断面図・エマグラム）を、
 | 公開の更新 | GitHub Actions `update-model`。**12Z初期値が揃う時間帯**（UTC 17〜23時の :30、1日7回）に自動実行。GFS 12Z は 16〜18時、ECMWF 12Z は 20〜23時UTC に揃う。00Z・18Z は定期実行に入れていない（手動実行のときだけ載る） |
 | 画面の反映 | `web/**` を push すると、`deploy-web` が画像を作らず画面だけ数十秒で反映 |
 | 公開される量 | ECMWF 5初期値・GFS 4初期値（約2日分）。1初期値は約20MB。GitHub Pages は 1GB が目安 |
-| ローカルの更新 | launchd の2ジョブ: `com.masahiro.tenkizu_web_sync`（公開分の画像を30分おきに取り込む）、`com.masahiro.tenkizu_web_gsm`（GSM を 00/12Z だけ取得・3日保管） |
+| ローカルの更新 | launchd のジョブ: `com.masahiro.tenkizu_web_sync`（公開分の画像を30分おきに取り込む）、`com.masahiro.tenkizu_web_gsm`（GSM を 00/12Z だけ取得・3日保管）、`com.masahiro.tenkizu_web_disk`（ディスク使用量のチェック。下の「ディスク使用量の制限と通知」を参照） |
 
 ### よく使うコマンド（`/opt/anaconda3/envs/met_env_310/bin/python` を使う）
 
     cd ~/projects/tenkizu_web
     python update_latest.py                          # 最新の初期値を取得して作図（ECMWF・GFS・GSM）
     python make_charts.py gfs --latest --max-ft 24   # 1モデルだけ、24時間まで
-    python server.py                                 # ローカルで閲覧 http://127.0.0.1:8790/（自由選択もここ）
+    python server.py                                 # ローカルで閲覧 http://127.0.0.1:8791/（自由選択もここ。nwp_chart_web は 8790 なので同時に動かせる）
     python sync_public.py                            # 公開分を手元へ取り込む
     python -m pytest tests                           # テスト
 
 公開側の図を作り直す: GitHub の Actions → update-model → Run workflow で `force` にチェック。
+
+### ディスク使用量の制限と通知（ローカル）
+自由選択で取得するデータは1コマ ECMWF 約36MB・GFS 約71MB で、自動では消えないため、上限を設けて古いものから削除し、多くなったら通知する（`disk_guard.py`）。
+
+| 対象 | 既定の上限 | 超えたとき |
+|---|---|---|
+| 取得データ（`data/ecmwf`・`data/gfs` の GRIB2。自由選択で取得したもの） | 3GB | **古いファイルから自動で削除**（新しいものは残す） |
+| 自由選択の画像（`output/custom`） | 500MB | 古いものから自動で削除（作り直せる） |
+| GSM の取得データ（`data/gsm`） | 4GB | 警告のみ（作図に必要なので消さない。launchd が3日で自動削除） |
+| 作図済みの画像（`output/` の ecmwf・gfs・gsm） | 2GB | 警告のみ |
+| ディスクの空き | 20GB 未満で警告、5GB 未満で**自由選択の新しい取得を止める** | 通知・取得停止 |
+
+- 取得の直前（自由選択）に自動で整理し、作図後に画像も整理する。自由選択のページの下部に、使用量と上限が出る（上限超過・空き不足は赤）。
+- 通知は macOS の通知センター。同じ内容は24時間に1回まで。launchd `com.masahiro.tenkizu_web_disk`（6時間おき）で `disk_guard.py --prune --notify` を実行する（登録手順は PUBLISH.md）。
+- 上限を変えるには、プロジェクト直下に `disk_limits.json` を作る（無ければ既定値）。例: `{"grib_gb": 5, "custom_mb": 300, "free_warn_gb": 30}`。キーは `grib_gb`・`custom_mb`・`gsm_gb`・`output_gb`・`free_warn_gb`・`free_min_gb`。
+- 手動の確認・整理: `python disk_guard.py`（表示だけ）、`python disk_guard.py --prune`（上限超過分を削除）、`python disk_guard.py --test-notify`（通知が出るかの確認）。
 
 ## 4. 出典・免責
 - ECMWF: © ECMWF, IFS open data, CC BY 4.0。加工して作図したもので、ECMWF の公式な図ではない。
@@ -84,6 +100,7 @@ tenkizu（CLI で描いていた天気図・断面図・エマグラム）を、
 | 北半球図が半分しか出ない | ECMWF の経度が −180〜180 度で来る環境がある。`nwp_data._read` で 0〜360 に正規化済み |
 | `python3` で `ModuleNotFoundError` | `~/projects/.venv` が使われている。conda の `met_env_310` の python を絶対パスで指定する |
 | 定期実行が動かない | GitHub の schedule は遅れることがある。Actions の履歴を確認し、必要なら手動実行。恒久策は cron-job.org から `workflow_dispatch`（nwp_chart_web の CRON_JOB_ORG.md が参考） |
+| 自由選択が「ディスクの空きが少ないため…取得できません」 | 空きが5GB未満（`free_min_gb`）。不要なファイルを消すか、`disk_limits.json` で下げる。`python disk_guard.py` で使用量を確認 |
 | 自由選択が「GSM のデータが手元にありません」 | GSM は自動取得しない設計（ファイルが大きい）。launchd の GSM ジョブが取った初期値だけ選べる |
 
 ## 6. ファイル構成
@@ -94,6 +111,7 @@ tenkizu（CLI で描いていた天気図・断面図・エマグラム）を、
     ├── xsection.py          鉛直断面図（固定断面 SECTIONS）
     ├── emagram.py           エマグラム（固定地点 STATIONS）
     ├── custom.py            ローカルの自由選択（任意の断面線・地点）
+    ├── disk_guard.py        ディスク使用量の制限・通知（ローカル）
     ├── make_charts.py       取得→作図→manifest 更新の本体
     ├── update_latest.py     最新の初期値を取得して作図（CI・launchd から）
     ├── publish.py / build_site.py / sync_public.py   公開ブランチへの反映・静的サイト作成・公開分の取り込み
@@ -111,6 +129,7 @@ tenkizu（CLI で描いていた天気図・断面図・エマグラム）を、
 |---|---|
 | 2026-11-11 | 新規作成。nwp_chart_web の枠組みを移植し、新規図（Qベクトル・不安定域・FAX57/78・地上FAX・北半球極座標）、固定鉛直断面（130E・140E）、固定エマグラム5地点を実装。ローカルの自由選択（地図クリック）、気圧面を13層に拡張、GitHub Pages で公開開始、ローカル定期更新（launchd）を登録 |
 | 2026-11-11 | 公開後の修正: ECMWF の経度（−180〜180）の正規化、cartopy 0.26 の極座標範囲、日本語フォント、画用紙版の保存キー分離 |
+| 2026-11-11 | ローカルサーバーの既定ポートを 8791 に変更（nwp_chart_web の 8790 と同時に動かせる）。ディスク使用量の制限・通知（`disk_guard.py`・自由選択ページの表示・launchd 雛形）を追加 |
 | 2026-11-11 | nwp_chart_web 由来の古い記述を整理（画用紙版ヘルプの刻み・更新の表、AIFS・JRA-55・GSM 0.125°域の処理。GSM の定期取得で余分な Rjp ファイルを取らなくなった） |
 | 2026-11-11 | 通常版にヘルプ（使い方・図の読み方・更新時刻の目安。ボタンと H キー）を追加 |
 | 2026-11-11 | 初期画面の変更（通常版は北半球300hPa・平面図に改名・高度順、画用紙版は高度順・断面140E追加）、画用紙版の整理（範囲・モデルの選択欄と広さ違いを削除、整列と初期化の分離、北半球図が隠れない敷き詰め、登録した配置を選び直せるよう修正）、通常版のエマグラムは那覇から |

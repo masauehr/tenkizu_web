@@ -12,6 +12,7 @@ import re
 from datetime import timedelta
 from pathlib import Path
 
+import disk_guard
 import nwp_data
 
 ROOT = Path(__file__).resolve().parent
@@ -75,6 +76,8 @@ def load_F(model, init_s, ft, fetch=True):
     if not path.exists():
         if not fetch:
             raise CustomError("データがありません")
+        if not disk_guard.make_room(80 * disk_guard.MB):   # 古い取得データを消して余地を作る。空きが少なすぎるなら取得しない
+            raise CustomError("ディスクの空きが少ないため、新しいデータを取得できません（空きを増やしてから、もう一度試してください）")
         if nwp_data.fetch_subset(model, init, ft, d) is None:
             raise CustomError(f"{nwp_data.MODELS[model]['label']} {init_s} FT{ft}h のデータを取得できません（初期値・予報時間を確認してください）")
     return nwp_data.load_fields(model, path, None, 6, False)
@@ -104,4 +107,5 @@ def render(p):
         tmp.replace(out)
     finally:
         tmp.unlink(missing_ok=True)
+    disk_guard.prune_group("custom")   # 自由選択の画像が上限を超えたら、古いものから消す
     return out

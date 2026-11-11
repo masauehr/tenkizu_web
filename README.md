@@ -12,7 +12,7 @@ tenkizu の CLI 作図（天気図・断面図・エマグラム）を、ブラ�
 
     cd ~/projects/tenkizu_web
     /opt/anaconda3/envs/met_env_310/bin/python update_latest.py   # 最新の初期値を取得して作図
-    /opt/anaconda3/envs/met_env_310/bin/python server.py          # http://127.0.0.1:8790/
+    /opt/anaconda3/envs/met_env_310/bin/python server.py          # http://127.0.0.1:8791/
 
 `python3` ではなく conda の `met_env_310` の python を絶対パスで指定する（`python3` は別の環境になることがある）。
 任意の断面線・地点の作図は、画面の「自由選択」（ローカルのみ）。

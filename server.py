@@ -6,12 +6,13 @@
   /output/   → output/（make_charts.py が作成したPNGとmanifest.json）
   POST /api/update  → 最新データを取得して作図（update_latest.py を裏で実行。ローカルからのみ）
   GET  /api/status  → 更新ジョブの状態とログ末尾
+  GET  /api/disk    → ローカルのディスク使用量と上限（disk_guard.py。ローカルからのみ）
   GET  /api/custom  → 任意の断面線・地点で断面図／エマグラムを作る（custom.py。ローカルからのみ）
                       ?kind=xsection&model=gfs&init=YYYYMMDDHH&ft=12&lat1=45&lon1=130&lat2=25&lon2=130
                       ?kind=emagram&model=gfs&init=YYYYMMDDHH&ft=12&lat=26.2&lon=127.7
 
 使用例:
-  python server.py                 # http://127.0.0.1:8790/
+  python server.py                 # http://127.0.0.1:8791/（nwp_chart_web のローカルサーバーは 8790 で、同時に動かせる）
   python server.py --port 9000
 外部公開はしない設計（127.0.0.1 固定）。LAN内の別端末から見る場合のみ --host 0.0.0.0 を明示する。
 """
@@ -27,7 +28,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
-import custom  # noqa: E402  任意の断面線・地点の作図（ローカル専用）
+import custom  # noqa: E402
+import disk_guard  # noqa: E402  任意の断面線・地点の作図（ローカル専用）
 LOG_FILE = ROOT / "logs" / "update_ui.log"
 _custom_lock = threading.Lock()   # 作図は重いので同時に1つだけ（取得が入ると1分ほどかかる）
 
@@ -102,6 +104,13 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/custom":
             self._custom()
             return
+        if path == "/api/disk":
+            if self._local_only():
+                rep = disk_guard.report()
+                self._json(200, {"free": rep["free"], "free_level": rep["free_level"],
+                                 "items": [{"key": k, "label": v["label"], "size": v["size"], "limit": v["limit"],
+                                            "level": v["level"], "prune": v["prune"]} for k, v in rep["items"].items()]})
+            return
         super().do_GET()
 
     def _custom(self):
@@ -159,7 +168,7 @@ class Handler(SimpleHTTPRequestHandler):
 def main():
     p = argparse.ArgumentParser(description="数値モデル天気図ビューアのサーバー")
     p.add_argument("--host", default="127.0.0.1")
-    p.add_argument("--port", type=int, default=8790)
+    p.add_argument("--port", type=int, default=8791)
     if any(a in sys.argv[1:] for a in ("?", "-?", "--?")):
         p.print_help()
         return

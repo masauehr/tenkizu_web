@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- ローカルのディスク使用量のチェック: 6時間おきに、上限を超えた分を古い順に削除し（取得データ・自由選択の画像）、
+       上限超過・空き容量の不足を macOS の通知で知らせる（同じ内容は24時間に1回）。上限は disk_limits.json で変えられる。
+       登録: cp このファイル ~/Library/LaunchAgents/ && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.masahiro.tenkizu_web_disk.plist
+       止める: launchctl bootout gui/$(id -u)/com.masahiro.tenkizu_web_disk -->
+  <key>Label</key><string>com.masahiro.tenkizu_web_disk</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/anaconda3/envs/met_env_310/bin/python</string>
+    <string>/Users/masahiro/projects/tenkizu_web/disk_guard.py</string>
+    <string>--prune</string>
+    <string>--notify</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/masahiro/projects/tenkizu_web</string>
+  <key>StartInterval</key><integer>21600</integer>
+  <key>RunAtLoad</key><false/>
+  <key>StandardOutPath</key><string>/Users/masahiro/projects/tenkizu_web/logs/disk_guard.log</string>
+  <key>StandardErrorPath</key><string>/Users/masahiro/projects/tenkizu_web/logs/disk_guard.log</string>
+</dict>
+</plist>

@@ -19,6 +19,8 @@ tenkizu の CLI 作図（天気図・断面図・エマグラム）を Web で�
 - 経度は 0〜360 に正規化して扱う（`nwp_data._read`）。ECMWF のオープンデータは −180〜180 度で来ることがある。
 - 北半球図（`render_polar`）の範囲は投影座標で指定する（cartopy 0.26 対応）。
 - 画用紙版の保存キーは `tenkizuBoard.v1`。**同じドメイン（masauehr.github.io）の nwp_chart_web と localStorage を共有する**ため、キー名を共通にしない。
+- ローカルのディスク: 自由選択で取得した GRIB2（`data/ecmwf`・`data/gfs`）と `output/custom` は `disk_guard.py` が上限を超えた分を古い順に削除する。**GSM のデータ（`data/gsm`）と作図済み画像は消さない**（警告のみ）。消す対象を増やすときは `groups()` の `prune` を確認する。
+- ローカルサーバーの既定ポートは **8791**（nwp_chart_web は 8790。同時に動かせるよう分けてある）。
 - 公開サイトの容量は 1GB が目安（1初期値 約20MB）。公開個数・図種・地域を増やす前に見積もる。
 - 図の見た目を変えたら、公開側の既存画像は作り直さないと変わらない（Actions の update-model を `force=true` で手動実行）。
 - 公開ブランチ（gh-pages）への反映・Pages の設定・定期実行の時刻変更は、ユーザーの確認を取ってから行う。
@@ -30,4 +32,4 @@ tenkizu の CLI 作図（天気図・断面図・エマグラム）を Web で�
 
 ## 定期処理（登録済み）
 - GitHub Actions `update-model`: UTC 17〜23時の :30（12Z初期値の時間帯）。`deploy-web`: `web/**` の push で画面だけ反映。
-- launchd: `com.masahiro.tenkizu_web_sync`（30分おき）、`com.masahiro.tenkizu_web_gsm`（1時間おきに確認・00/12Z）。止める: `launchctl bootout gui/$(id -u)/<Label>`。
+- launchd: `com.masahiro.tenkizu_web_sync`（30分おき）、`com.masahiro.tenkizu_web_gsm`（1時間おきに確認・00/12Z）、`com.masahiro.tenkizu_web_disk`（6時間おき・ディスク制限と通知。登録はユーザーの確認後）。止める: `launchctl bootout gui/$(id -u)/<Label>`。

@@ -132,6 +132,19 @@
     applyKind();
   }
 
+  // ディスク使用量（ローカルサーバーの /api/disk）。上限を超えた項目は赤で出す
+  const fmtB = (b) => (b >= 1024 ** 3 ? (b / 1024 ** 3).toFixed(2) + "GB" : Math.round(b / 1024 ** 2) + "MB");
+  async function showDisk() {
+    try {
+      const j = await (await fetch("api/disk", { cache: "no-store" })).json();
+      const parts = j.items.filter((i) => i.key === "grib" || i.key === "custom").map((i) =>
+        `<span class="${i.level === "over" ? "warn" : ""}">${i.label} ${fmtB(i.size)} / 上限 ${fmtB(i.limit)}</span>`);
+      parts.push(`<span class="${j.free_level === "ok" ? "" : "warn"}">ディスクの空き ${fmtB(j.free)}${j.free_level === "min" ? "（少ないため新しい取得を止めています）" : ""}</span>`);
+      $("disk").innerHTML = "ディスク: " + parts.join(" ／ ") + "（上限を超えると古いものから自動で削除します）";
+    } catch (e) { $("disk").textContent = ""; }
+  }
+  showDisk();
+
   $("go").onclick = async () => {
     const q = new URLSearchParams({ kind: kind(), model: $("model").value, init: $("init").value, ft: $("ft").value });
     for (const id of kind() === "xsection" ? ["lat1", "lon1", "lat2", "lon2"] : ["lat", "lon"]) q.set(id, $(id).value);
@@ -143,6 +156,7 @@
       else { $("msg").textContent = "完了"; $("result").innerHTML = `<img alt="" src="${j.url}">`; }
     } catch (e) { $("msg").textContent = "サーバーに接続できません（ローカルサーバーで開いてください）"; $("msg").className = "err"; }
     $("go").disabled = false;
+    showDisk();
   };
 
   boot();
