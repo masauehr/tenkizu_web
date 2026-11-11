@@ -1,4 +1,4 @@
-# tenkizu_web 設計メモ（2026-11-11 開始・Phase1〜3 実装済み・公開は未開始）
+# tenkizu_web 設計メモ（2026-11-11 開始・Phase1〜3 実装済み・2026-11-11 公開開始）
 
 tenkizu（CLIで天気図・断面図・エマグラムを描画）の成果を、Webアプリで見られるようにする新プロジェクト。
 仕組みは [nwp_chart_web](../nwp_chart_web/DESIGN.md) と同様（GitHub Actionsで作図 → 静的PNGをGitHub Pagesで配信）。
@@ -88,3 +88,11 @@ tenkizu_web/
 - **公開用の準備**: `update_latest.py`・`build_site.py`・`publish.py`・`.github/workflows/`（update-model・deploy-web）を移植。**自動実行は無効**（手動実行のみ）。手順は [PUBLISH.md](PUBLISH.md)。
 - テスト: `tests/test_charts.py`（6件、`python -m pytest tests`）。
 - **残り**: 公開の開始（ユーザー判断）、断面図の地図クリックでの2点指定、取得気圧面の追加（400/250/100hPa 等）の検討、ローカルの定期更新（launchd）。
+
+## 進捗（2026-11-11 公開開始）
+
+- **公開開始**: https://masauehr.github.io/tenkizu_web/ （GitHub Pages・gh-pages ブランチ）。定期実行は **12Z初期値が揃う時間帯**（UTC 17〜23時の :30、1日7回。GFS 12Z は 16:15〜18:00、ECMWF 12Z は 19:40〜23:25 に揃う実測）。00Z・18Z の時間帯は未設定（ECMWF 18Z は 0:30〜3:35 UTC に揃うため、定期実行ではなく手動実行のときだけ載る）。`web/**` の push は画像なしで自動反映（deploy-web）。11/11 は手動実行、自動実行は 11/12 02:30 JST から。
+- **自由選択の地図クリック**: `web/custom.html`＋`custom.js`。Canvas で自前描画（`make_coast.py` が作る `web/coast.json`・Natural Earth 50m・181KB。外部の地図タイル・APIキーは使わない）。断面は2回クリック＝始点→終点、エマグラムは1回クリック。範囲は東アジア／北半球。公開の固定断面・地点を参考表示。
+- **気圧面の追加**: `nwp_data.PLEVELS` に 1000/600/400/250/150/100hPa を追加（GSM も同様）。1ステップの取得量は ECMWF 約20→36MB、GFS 約38→71MB に増えた（PNG の容量は変わらない）。断面図は上端 100hPa、エマグラムは上端 100hPa（露点・相対湿度は 300hPa 以下だけ描く。それより上は湿度が信頼できないため）。
+- **日本語フォント**: CI（ubuntu）には日本語フォントが無く、図の中の日本語が四角になった。`fonts-noto-cjk` をCIで入れ、描画のフォント候補に `Noto Sans CJK JP` を追加。作り直しは Actions の `update-model` を `force=true` で手動実行する。
+- **ローカル定期更新（launchd）**: `launchd/com.masahiro.tenkizu_web_sync.plist`（30分おき・公開分を手元へ取り込み `sync_public.py`）と `com.masahiro.tenkizu_web_gsm.plist`（GSM を 00/12Z だけ1時間おきに確認・3日保管）。登録は PUBLISH.md の手順。

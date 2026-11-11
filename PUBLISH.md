@@ -8,7 +8,7 @@
 - 公開しない: GSM（`local_only`）、`output/custom/`（自由選択で作った画像。`build_site.py` が除外）。`publish.py` は GSM の指定を拒否する。
 - `web/custom.html`（自由選択）は静的サイトでは動かない（`/api/custom` が無い）。ローカルサーバーでだけ使う。
 
-## 公開を始めるとき（ユーザーの判断で行う）
+## 公開を始めたときの手順（記録。2026-11-11 実施済み）
 1. GitHub の Settings → Pages で、配信元を `gh-pages` ブランチ（/ root）にする。
 2. `.github/workflows/update-model.yml` の `schedule:`（または cron-job.org からの `workflow_dispatch`）を有効にする。時刻は nwp_chart_web の設定（UTC 1/4/6/7/9/10/17/18/20/22/23時の :30）が参考になる。
 3. `.github/workflows/deploy-web.yml` の `push:` を有効にすると、`web/**` の修正が画像なしで反映される。
@@ -20,3 +20,17 @@
 /opt/anaconda3/envs/met_env_310/bin/python build_site.py --out /tmp/site_check   # _site 相当を作る
 /opt/anaconda3/envs/met_env_310/bin/python publish.py --web-only --dry-run        # pushせず内容だけ表示
 ```
+
+## 作り直し（図の見た目を直したとき）
+Actions → update-model → Run workflow で `force` にチェック。作成済みの初期値も作り直して公開する（約30〜60分）。
+
+## ローカルの定期更新（launchd）
+```bash
+cp launchd/com.masahiro.tenkizu_web_sync.plist launchd/com.masahiro.tenkizu_web_gsm.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.masahiro.tenkizu_web_sync.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.masahiro.tenkizu_web_gsm.plist
+# 止める: launchctl bootout gui/$(id -u)/com.masahiro.tenkizu_web_sync
+```
+- sync: 公開側（ECMWF・GFS）の新しい画像を30分おきに `output/` へ取り込む（変更が無ければ数秒）。ログ `logs/sync.log`。
+- gsm: GSM（ローカル専用）を 00/12Z だけ取得・作図（初回は約600MB・十数分）。3日より古いものは削除。ログ `logs/gsm_auto.log`。
+- nwp_chart_web の GSM 取得と別々に動く（GSM のデータは重複して保管される。必要なら片方を止める）。
