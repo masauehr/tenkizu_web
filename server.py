@@ -7,6 +7,7 @@
   POST /api/update  → 最新データを取得して作図（update_latest.py を裏で実行。ローカルからのみ）
   GET  /api/status  → 更新ジョブの状態とログ末尾
   GET  /api/custom/list → 自由選択で作った画像の「最近の作図」（直近10件・新しい順。画像ファイルから作る）
+  POST /api/custom/publish・unpublish → 自由選択で作った画像を公開サイトに載せる／外す（publish.py --custom。ローカルのみ）
   GET  /api/disk    → ローカルのディスク使用量と上限（disk_guard.py。ローカルからのみ）
   GET  /api/custom  → 任意の断面線・地点で断面図／エマグラムを作る（custom.py。ローカルからのみ）
                       ?kind=xsection&model=gfs&init=YYYYMMDDHH&ft=12&lat1=45&lon1=130&lat2=25&lon2=130
@@ -19,6 +20,7 @@
 """
 import argparse
 import json
+import re
 import subprocess
 import sys
 import threading
@@ -32,6 +34,7 @@ sys.path.insert(0, str(ROOT))
 import custom  # noqa: E402
 import disk_guard  # noqa: E402  任意の断面線・地点の作図（ローカル専用）
 LOG_FILE = ROOT / "logs" / "update_ui.log"
+_publish_lock = threading.Lock()   # 公開（git push）は同時に1つだけ
 _custom_lock = threading.Lock()   # 作図は重いので同時に1つだけ（取得が入ると1分ほどかかる）
 
 # 画面の「最新を取得」ボタンから起動する更新ジョブの状態（サーバープロセス内で1つだけ）
@@ -145,7 +148,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?", 1)[0]
-        if path != "/api/update":
+        if path not in ("/api/update", "/api/custom/publish", "/api/custom/unpublish"):
             self._json(404, {"error": "not found"})
             return
         if not self._local_only():
@@ -155,8 +158,32 @@ class Handler(SimpleHTTPRequestHandler):
         if origin and origin.split("://", 1)[-1] != self.headers.get("Host"):
             self._json(403, {"error": "不正なOriginです"})
             return
+        if path.startswith("/api/custom/"):
+            self._custom_publish(path.endswith("/unpublish"))
+            return
         started = start_update()
         self._json(200, {"started": started, **job_status()})
+
+    def _custom_publish(self, remove):
+        """自由選択で作った画像を、公開サイト（gh-pages）に載せる／外す。publish.py --custom / --custom-remove を実行する。
+        ローカルからのみ・同一Originのみ（do_POST で確認済み）。公開は画面で2回押して確定した操作だけ。"""
+        names = self._body().get("names")
+        if (not isinstance(names, list) or not names or len(names) > 10
+                or not all(isinstance(n, str) and re.fullmatch(r"[A-Za-z0-9_]+\.png", n) for n in names)):
+            self._json(400, {"error": "画像の指定が不正です"})
+            return
+        try:
+            with _publish_lock:
+                r = subprocess.run([sys.executable, str(ROOT / "publish.py"), "--custom-remove" if remove else "--custom", *names],
+                                   cwd=ROOT, capture_output=True, text=True, timeout=300)
+        except subprocess.TimeoutExpired:
+            self._json(500, {"error": "公開の処理が時間内に終わりませんでした"})
+            return
+        tail = (r.stdout + r.stderr).strip().splitlines()[-3:]
+        if r.returncode != 0:
+            self._json(500, {"error": "公開サイトに反映できませんでした: " + " / ".join(tail)})
+            return
+        self._json(200, {"ok": True, "log": tail, "items": custom.list_recent()})
 
     def end_headers(self):
         p = self.path.split("?", 1)[0]

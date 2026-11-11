@@ -15,6 +15,15 @@
 4. 初回は手動実行（Actions → update-model → Run workflow）で動作を確認する。
 5. 容量: 1初期値 約20MB（日本周辺5図種＋北半球2＋断面2＋エマグラム5 × 13コマ）。Pages は1GB目安なので、公開個数を増やす前に見積もる。
 
+## 自由選択の図を公開サイトに載せる（任意）
+ローカルで作った断面図・エマグラムを、直近10件まで公開サイトに載せられる（自由選択のページの「公開サイトに載せる」。2回押して確定）。公開版では通常版の右の図に並べて見られる。
+```bash
+python publish.py --custom <画像名.png ...> [--dry-run]   # 載せる（output/custom/ の画像。条件ファイル .json が要る）
+python publish.py --custom-remove <画像名.png ...>         # 外す
+```
+- 反映先は gh-pages の `output/custom/`（`list.json` と画像）だけ。モデルの画像・画面ファイルには触れない。`list.json` は新しい順・最大10件。
+- 公開した名前は手元の `output/custom/published.json` に記録される（自由選択のページの【公開中】の表示に使う）。
+
 ## ローカルで公開物を確かめる
 ```bash
 /opt/anaconda3/envs/met_env_310/bin/python build_site.py --out /tmp/site_check   # _site 相当を作る

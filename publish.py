@@ -55,6 +55,8 @@ def parse_args():
     p.add_argument("--keep", type=int, default=None, help="公開する初期値の数（モデルごと。既定: nwp_data.MODELS の publish_keep）")
     p.add_argument("--remote", default="origin", help="公開先のリモート名（既定: origin）")
     p.add_argument("--branch", default="gh-pages", help="公開ブランチ（既定: gh-pages）")
+    p.add_argument("--custom", nargs="+", metavar="画像名", help="自由選択で作った画像（output/custom/ の PNG）を公開サイトに載せる（直近10件まで）")
+    p.add_argument("--custom-remove", nargs="+", metavar="画像名", help="公開サイトに載せた自由選択の画像を外す")
     p.add_argument("--dry-run", action="store_true", help="pushせず、変更の有無だけ表示")
     if any(a in sys.argv[1:] for a in ("?", "-?", "--?")):
         p.print_help()
@@ -70,8 +72,11 @@ def parse_args():
             p.error(f"{a.model} はローカル専用モデルのため、公開ブランチへは反映できません")
     if a.pull and not a.model:
         p.error("--pull には --model が必要です")
-    if not a.pull and not a.web_only and not a.model:
-        p.error("--model か --web-only を指定してください")
+    for n in (a.custom or []) + (a.custom_remove or []):
+        if not re.fullmatch(r"[A-Za-z0-9_]+\.png", n):
+            p.error(f"画像名が不正です: {n}")
+    if not a.pull and not a.web_only and not a.model and not a.custom and not a.custom_remove:
+        p.error("--model・--web-only・--custom・--custom-remove のどれかを指定してください")
     return a
 
 
@@ -158,6 +163,51 @@ def sync_model(wt: Path, model: str, keep: int):
     return inits
 
 
+CUSTOM_MAX = 10   # 公開サイトに載せる自由選択の画像の最大件数
+
+
+def sync_custom(wt: Path, add, remove):
+    """自由選択の画像を公開側の output/custom/ へ載せる・外す。list.json（新しい順・最大10件）を作り直す。
+    他のフォルダ（モデルの画像・画面ファイル）には触れない。公開した画像の名前の一覧を返す。"""
+    import json
+    sys.path.insert(0, str(ROOT))
+    import custom
+    dst = wt / "output" / "custom"
+    dst.mkdir(parents=True, exist_ok=True)
+    lp = dst / "list.json"
+    try:
+        old = json.loads(lp.read_text(encoding="utf-8")).get("items", [])
+    except (OSError, ValueError):
+        old = []
+    local = {Path(x["url"]).name: x for x in custom.list_recent(10_000)}
+    new = []
+    for name in add:
+        e = local.get(name)
+        if e is None:
+            raise RuntimeError(f"{name} が output/custom/ にありません")
+        if "条件は不明" in e["label"]:
+            raise RuntimeError(f"{name} は条件が分からない（古い）画像のため公開できません。作図し直してください")
+        shutil.copy2(custom.CUSTOM_DIR / name, dst / name)
+        new.append({k: v for k, v in e.items() if k != "published"})     # ローカル専用の項目は載せない
+    skip = set(add) | set(remove or [])
+    items = (new + [x for x in old if Path(x["url"]).name not in skip])[:CUSTOM_MAX]
+    want = {Path(x["url"]).name for x in items}
+    for f in dst.glob("*.png"):           # 一覧から外れた画像は公開側からも消す
+        if f.name not in want:
+            f.unlink()
+    lp.write_text(json.dumps({"items": items, "updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
+                             ensure_ascii=False), encoding="utf-8")
+    return [Path(x["url"]).name for x in items]
+
+
+def record_published(names):
+    """公開した画像の名前を、手元の output/custom/published.json に記録する（自由選択の一覧に「公開中」を出すため）。"""
+    import json
+    d = ROOT / "output" / "custom"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "published.json").write_text(json.dumps({"names": names}, ensure_ascii=False), encoding="utf-8")
+
+
 def regenerate_manifest(wt: Path):
     """公開側の output/ を走査して manifest.json を作り直す（重い依存はここで初めて読み込む）。
     中身が前回と同じ（更新時刻 updated だけが違う）なら、前回のものに戻して無駄なコミットを避ける。"""
@@ -179,20 +229,28 @@ def regenerate_manifest(wt: Path):
 
 
 def publish(a):
+    custom_mode = bool(a.custom or a.custom_remove)   # 自由選択の画像だけを反映する（画面ファイルやモデルの画像には触れない）
+    published = []
     for attempt in range(1, 6):
         tip = fetch_tip(a.remote, a.branch)
         wt = make_worktree(tip)
         tmp_branch = f"publish-tmp-{os.getpid()}-{attempt}"
         try:
-            sync_web(wt)
-            note = "画面ファイルのみ"
-            if a.model and not a.web_only:
+            if custom_mode:
+                published = sync_custom(wt, a.custom or [], a.custom_remove or [])
+                note = f"自由選択の断面図・エマグラム（公開 {len(published)} 件）"
+            else:
+                sync_web(wt)
+                note = "画面ファイルのみ"
+            if a.model and not a.web_only and not custom_mode:
                 inits = sync_model(wt, a.model, a.keep)
                 regenerate_manifest(wt)
                 note = f"{a.model} {', '.join(inits)} と画面ファイル"
             git("add", "-A", cwd=wt)
             if tip is not None and git("diff", "--cached", "--quiet", cwd=wt, check=False).returncode == 0:
                 print("公開ブランチに変更はありません（何も反映しません）")
+                if custom_mode:
+                    record_published(published)
                 return 0
             n = len(git("diff", "--cached", "--name-only", cwd=wt).stdout.split())
             print(f"反映内容: {note}（変更ファイル {n} 個）", flush=True)
@@ -205,6 +263,8 @@ def publish(a):
             r = git("push", lease, a.remote, f"{tmp_branch}:{a.branch}", cwd=wt, check=False)
             if r.returncode == 0:
                 print(f"公開ブランチ {a.branch} へ反映しました", flush=True)
+                if custom_mode:
+                    record_published(published)
                 return 0
             print(f"push が競合/失敗（{attempt}/5）: {(r.stderr or '').strip().splitlines()[-1:]}", flush=True)
         finally:

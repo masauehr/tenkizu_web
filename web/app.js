@@ -57,7 +57,7 @@
   // 地域ボタンの並びと表示名（日本周辺は平面図）。北半球が先頭＝初期表示（北半球300hPa）
   const REGION_ORDER = ["polar", "japan", "okinawa", "asia", "xsec", "emagram"];
   const REGION_LABEL = { japan: "平面図", custom: "自由選択（断面図・エマグラム）" };
-  const regionLabel = (r) => REGION_LABEL[r] || S.manifest.regions[r] || r;
+  const regionLabel = (r) => (r === "custom" && !S.local ? "保存された断面図・エマグラム（公開分）" : REGION_LABEL[r] || S.manifest.regions[r] || r);
   // 地域を切り替えたときに最初に出す図（無ければ並びの先頭）。エマグラムは那覇
   const REGION_FIRST_CHART = { polar: "polar300", xsec: "xs130", emagram: "em_47936" };
   const firstChart = (region, charts) => (charts.includes(REGION_FIRST_CHART[region]) ? REGION_FIRST_CHART[region] : charts[0]);
@@ -74,12 +74,16 @@
   // （ブラウザの保存には頼らない。別のブラウザでも、サイトデータを消しても同じ一覧になる）
   let customCache = [];                                // サーバーが返した一覧（新しい順・最大10件）
   const customList = () => customCache;
-  async function loadCustom() {                        // 取得できたか（＝ローカルサーバーか）を返す
+  async function loadCustom() {                        // ローカルサーバーから取得できたか（＝ローカルか）を返す
     try {
       const j = await (await fetch(API + "custom/list", { cache: "no-store" })).json();
+      if (Array.isArray(j.items)) { customCache = j.items; return true; }
+    } catch (e) { /* 公開サイトにはこの API が無い */ }
+    try {                                              // 公開サイト: 作者が公開した直近10件の一覧（静的ファイル）
+      const j = await (await fetch(OUT + "custom/list.json", { cache: "no-store" })).json();
       customCache = Array.isArray(j.items) ? j.items : [];
-      return Array.isArray(j.items);
-    } catch (e) { customCache = []; return false; }
+    } catch (e) { customCache = []; }
+    return false;
   }
   const customBase = (c) => c.url.split("/").pop();    // 画像のファイル名（選択欄の値・URLの chart2 に使う）
   const customFind = (chart) => { const l = customList(); return chart === "last" ? (l[0] || null) : (l.find((c) => customBase(c) === chart) || null); };

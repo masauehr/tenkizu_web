@@ -119,6 +119,10 @@ def list_recent(limit=HIST_MAX):
     """output/custom/ の画像を、新しく作った（または使った）順に limit 件返す。
     .json があればその条件を、無ければ（以前に作った画像）ファイル名から分かる範囲を使う。"""
     items = []
+    try:   # 公開サイトに載せた画像（publish.py が published.json に記録する）
+        published = set(json.loads((CUSTOM_DIR / "published.json").read_text(encoding="utf-8")).get("names", []))
+    except (OSError, ValueError):
+        published = set()
     try:
         files = [f for f in CUSTOM_DIR.glob("*.png") if not f.name.endswith(".tmp.png")]
     except OSError:
@@ -142,7 +146,7 @@ def list_recent(limit=HIST_MAX):
                         label=("断面" if kind == "xsection" else "エマグラム") + "（条件は不明）",
                         model=nwp_data.MODELS.get(mk, {}).get("label", mk), initText=init_text(ik))
         meta = dict(meta)
-        meta.update(url="output/custom/" + f.name, ts=ts)
+        meta.update(url="output/custom/" + f.name, ts=ts, published=f.name in published)
         meta.pop("params", None)
         items.append(meta)
     items.sort(key=lambda x: x["ts"], reverse=True)

@@ -152,14 +152,43 @@
     try { const j = await (await fetch("api/custom/list", { cache: "no-store" })).json(); return Array.isArray(j.items) ? j.items : []; }
     catch (e) { return []; }
   }
-  const histText = (c) => `${c.label}（${c.model} ${c.initText} ＋${c.ft}h）`;
+  const histText = (c) => `${c.label}（${c.model} ${c.initText} ＋${c.ft}h）` + (c.published ? "【公開中】" : "");
   // 結果の画像と「平面図と並べて見る」のリンクを出す
   function showResult(c) {
     const base = c.url.split("/").pop();
     const link = c.mk ? `./#model=${c.mk}&init=${c.ik}&region=japan&chart=fax57&ft=${c.ft}&fig=1&region2=custom&chart2=${encodeURIComponent(base)}`
                       : `./#region=japan&chart=fax57&fig=1&region2=custom&chart2=${encodeURIComponent(base)}`;
     $("result").innerHTML = `<p><a href="${link}" target="_blank" rel="noopener">平面図（FAX57）と並べて見る（通常版を開く）</a>` +
-      `<span class="note">　通常版の「別の図を並べる」で、右の図を選び直せます</span></p><img alt="${histText(c)}" src="${c.url}">`;
+      `<span class="note">　通常版の「別の図を並べる」で、右の図を選び直せます</span></p>` +
+      `<p id="pubRow"><button id="btnPub">${c.published ? "公開から外す" : "公開サイトに載せる"}</button> ` +
+      `<span class="note" id="pubMsg">${c.published ? "公開中です（公開サイトの通常版で、誰でも右の図に並べて見られます）"
+        : "公開サイトに載せると、誰でも公開版の通常版の右の図に並べて見られます（直近10件まで。古いものから外れます）"}</span></p>` +
+      `<img alt="${histText(c)}" src="${c.url}">`;
+    wirePub(c);
+  }
+
+  // 公開サイトに載せる／外す。誤操作を防ぐため、2回押して確定する（1回目で表示が変わり、5秒以内にもう一度押す）
+  function wirePub(c) {
+    const b = $("btnPub"), msg = $("pubMsg"), label = b.textContent;
+    b.onclick = async () => {
+      if (!b.dataset.armed) {
+        b.dataset.armed = "1";
+        b.textContent = c.published ? "本当に外す（もう一度押す）" : "本当に公開する（もう一度押す）";
+        setTimeout(() => { if (b.dataset.armed) { delete b.dataset.armed; b.textContent = label; } }, 5000);
+        return;
+      }
+      b.disabled = true;
+      msg.textContent = "公開サイトへ反映しています…（数十秒かかります）";
+      try {
+        const r = await fetch("api/custom/" + (c.published ? "unpublish" : "publish"), {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ names: [c.url.split("/").pop()] }) });
+        const j = await r.json();
+        if (!r.ok) { msg.textContent = j.error || "反映できません"; b.disabled = false; delete b.dataset.armed; b.textContent = label; return; }
+        await renderHist();
+        showResult((j.items || []).find((x) => x.url === c.url) || { ...c, published: !c.published });
+        $("pubMsg").textContent = (c.published ? "公開から外しました" : "公開しました（公開サイトへの反映に1〜2分かかります）") + "。";
+      } catch (e) { msg.textContent = "反映できません（ローカルサーバーを確認してください）"; b.disabled = false; delete b.dataset.armed; b.textContent = label; }
+    };
   }
   async function renderHist() {
     const h = await getHist(), box = $("hist");
