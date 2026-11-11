@@ -59,6 +59,9 @@
   const REGION_ORDER = ["polar", "japan", "okinawa", "asia", "xsec", "emagram"];
   const REGION_LABEL = { japan: "平面図" };
   const regionLabel = (r) => REGION_LABEL[r] || S.manifest.regions[r] || r;
+  // 地域を切り替えたときに最初に出す図（無ければ並びの先頭）。エマグラムは那覇
+  const REGION_FIRST_CHART = { polar: "polar300", xsec: "xs130", emagram: "em_47936" };
+  const firstChart = (region, charts) => (charts.includes(REGION_FIRST_CHART[region]) ? REGION_FIRST_CHART[region] : charts[0]);
   const regionRank = (r) => { const i = REGION_ORDER.indexOf(r); return i >= 0 ? i : 100; };
   const chartRank = (c) => {
     const i = CHART_ORDER.indexOf(c);
@@ -138,7 +141,7 @@
     const regs = regionsAvail();
     S.region = regs.includes(h.region) ? h.region : regs[0];
     const charts = chartsAvail(S.region);
-    S.chart = charts.includes(h.chart) ? h.chart : (charts.includes("polar300") ? "polar300" : charts[0]);   // 既定は北半球300hPa
+    S.chart = charts.includes(h.chart) ? h.chart : firstChart(S.region, charts);   // 既定は北半球300hPa
     S.ft = +h.ft || 0;
 
     buildModelSel();
@@ -259,7 +262,7 @@
     const regs = regionsAvail();
     if (!regs.includes(S.region)) S.region = regs[0];
     const charts = chartsAvail(S.region);
-    if (!charts.includes(S.chart)) S.chart = charts[0];
+    if (!charts.includes(S.chart)) S.chart = firstChart(S.region, charts);
     const f = fts();
     if (f.length && !f.includes(S.ft)) S.ft = f.reduce((a, b) => (Math.abs(b - S.ft) < Math.abs(a - S.ft) ? b : a));
   }

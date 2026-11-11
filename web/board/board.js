@@ -146,44 +146,17 @@
     rank(RORDER, effRegion(a)) - rank(RORDER, effRegion(b)) ||
     rank(modelKeys(), effModel(a)) - rank(modelKeys(), effModel(b)) || a.id.localeCompare(b.id));
 
-  function fillRegionSel(sel) {
-    sel.innerHTML = "";
-    const o0 = document.createElement("option");
-    o0.value = ""; o0.textContent = "範囲:全体";  // 既定は全体の表示範囲に揃う
-    sel.appendChild(o0);
-    for (const r of regionsOf()) {
-      const o = document.createElement("option");
-      o.value = r; o.textContent = RSHORT[r] || r;
-      sel.appendChild(o);
-    }
-  }
-
-  function fillModelSel(sel) {
-    sel.innerHTML = "";
-    const o0 = document.createElement("option");
-    o0.value = ""; o0.textContent = "モデル:全体";
-    sel.appendChild(o0);
-    for (const k of modelKeys()) {
-      const o = document.createElement("option");
-      o.value = k; o.textContent = S.m.models[k].label;
-      sel.appendChild(o);
-    }
-    sel.hidden = modelKeys().length < 2;   // モデルが1つだけなら出さない
-  }
-
   function ensureEl(it) {
     if (els[it.id]) return els[it.id];
     const root = document.createElement("div");
     root.className = "panel";
     root.innerHTML =
-      `<div class="title"><span class="left"><span class="name"></span><select class="rsel" title="この図の表示範囲"></select><select class="msel" title="この図のモデル"></select></span>` +
-      `<span class="btns"><span class="dup" title="別の表示範囲で複製（広さ違い）">⧉</span><span class="x" title="閉じる">✕</span></span></div>` +
+      `<div class="title"><span class="left"><span class="name"></span></span>` +
+      `<span class="btns"><span class="x" title="閉じる">✕</span></span></div>` +
       `<div class="body"><img alt=""><div class="nodata" hidden>この図・範囲の画像なし</div><div class="grip" title="ドラッグで大きさ変更"></div></div>`;
     $("board").appendChild(root);
     const e = { root, img: root.querySelector("img"), nodata: root.querySelector(".nodata"),
-                name: root.querySelector(".name"), sel: root.querySelector(".rsel"), msel: root.querySelector(".msel"), wantUrl: "" };
-    fillRegionSel(e.sel);
-    fillModelSel(e.msel);
+                name: root.querySelector(".name"), wantUrl: "" };
     els[it.id] = e;
     wirePanel(it.id, e);
     return e;
@@ -247,18 +220,6 @@
       it.w = nw;
       applyGeom(it); save();
     }, { passive: false });
-    // この図の表示範囲
-    e.sel.addEventListener("change", () => {
-      const it = getItem(id); if (!it) return;
-      it.region = e.sel.value || null;
-      renderItem(it); refreshLabel(); save();
-    });
-    e.msel.addEventListener("change", () => {
-      const it = getItem(id); if (!it) return;
-      it.model = e.msel.value || null;
-      renderItem(it); refreshLabel(); save();
-    });
-    e.root.querySelector(".dup").onclick = () => addVariantFor(getItem(id));
     e.root.querySelector(".x").onclick = () => {
       const it = getItem(id); if (!it) return;
       if (it.primary) { it.on = false; applyGeom(it); buildToggles(); }
@@ -278,8 +239,6 @@
   function renderItem(it) {
     const e = ensureEl(it);
     applyGeom(it);
-    e.sel.value = it.region || "";
-    e.msel.value = it.model || "";
     // 全体と別のモデルの図は、見出しにモデル名（ECMWF/GFS）を出す（選択欄は幅が狭いと隠れるため）
     const mname = effModel(it) !== S.model && S.m.models[effModel(it)] ? " " + S.m.models[effModel(it)].label : "";
     const base = (SHORT[it.chart] || it.chart) + mname;
@@ -358,23 +317,48 @@
   }
 
   // ---------- 配置
-  function tile() {
-    const on = sortedVisible();
+  // 画像の縦横比（高さ/幅）。北半球図は正方形、他は 950×760。読み込み済みなら実際の画像の比率を使う
+  const ASPECT = { polar300: 1, polar500: 1 };
+  const aspectOf = (it) => {
+    const e = els[it.id];
+    if (e && e.img && e.img.naturalWidth) return e.img.naturalHeight / e.img.naturalWidth;
+    return ASPECT[it.chart] || IMG_H / IMG_W;
+  };
+  // 敷き詰め。keepOrder=true なら今の並び（上の段から、段の中は左から）のまま、false なら高度順。
+  // どちらも全て同じ幅にして、段ごとに一番高い図に高さを合わせる（正方形の北半球図が下の段に隠れない・重ならない）
+  function tile(keepOrder) {
+    let on = sortedVisible();
     if (!on.length) return;
-    const W = innerWidth, H = innerHeight - barH() - ($("credit").offsetHeight + 8);   // 画面下の出典表示の分も引く（fitBoard と同じ。引かないと最下段が隠れる）
+    if (keepOrder === true) {
+      const rows0 = [];
+      for (const it of on.slice().sort((a, b) => a.y - b.y)) {
+        const r = rows0.find((r) => Math.abs(r.y - it.y) < 60);
+        if (r) r.items.push(it); else rows0.push({ y: it.y, items: [it] });
+      }
+      on = rows0.flatMap((r) => r.items.sort((a, b) => a.x - b.x));
+    }
+    const W = innerWidth, H = innerHeight - barH() - ($("credit").offsetHeight + 8);   // 画面下の出典表示の分も引く（fitBoard と同じ）
+    const GAP = 4;
+    const layout = (cols) => {
+      const rows = [];
+      for (let i = 0; i < on.length; i += cols) rows.push(on.slice(i, i + cols));
+      const asp = rows.map((r) => Math.max(...r.map(aspectOf)));
+      const w = Math.min(W / cols - GAP, (H - rows.length * (TITLE_H + GAP)) / asp.reduce((a, b) => a + b, 0));
+      return { cols, rows, asp, w };
+    };
     let best = null;
     for (let cols = 1; cols <= on.length; cols++) {
-      const rows = Math.ceil(on.length / cols);
-      const w = Math.min(W / cols, ((H / rows) - TITLE_H) * IMG_W / IMG_H) - 4;
-      if (!best || w > best.w) best = { cols, w };
+      const l = layout(cols);
+      if (!best || l.w > best.w) best = l;
     }
     const w = Math.min(MAX_W, Math.max(MIN_W, Math.floor(best.w)));
-    on.forEach((it, i) => {
-      it.w = w;
-      it.x = (i % best.cols) * (w + 4) + 2;
-      it.y = Math.floor(i / best.cols) * (w * IMG_H / IMG_W + TITLE_H + 4) + 2;
-      it.z = ++S.zTop;
-      applyGeom(it);
+    let y = 2;
+    best.rows.forEach((r, ri) => {
+      r.forEach((it, ci) => {
+        it.w = w; it.x = ci * (w + GAP) + 2; it.y = y; it.z = ++S.zTop;
+        applyGeom(it);
+      });
+      y += w * best.asp[ri] + TITLE_H + GAP;
     });
     save();
   }
@@ -385,34 +369,6 @@
     S.items = [];
     for (const c of chartsOf()) S.items.push(newItem(c, { on: isDefaultOn(c) }));
     buildToggles(); refresh(); tile();
-  }
-
-  // ---------- 広さ違い
-  // 1枚の図を、まだ並んでいない別の表示範囲で複製する
-  function addVariantFor(it) {
-    if (!it) return;
-    const shown = new Set(visible().filter((i) => i.chart === it.chart).map(effRegion));
-    const next = regionsOf().find((r) => !shown.has(r) && has(effModel(it), r, it.chart));
-    if (!next) { toast("この図は、全ての表示範囲で既に並んでいます"); return; }
-    const v = newItem(it.chart, { region: next, model: it.model, primary: false, x: it.x + 30, y: it.y + 30, w: it.w });
-    S.items.push(v);
-    renderItem(v); activate(v.id); save();
-  }
-
-  // 選択中の図を、他の全ての表示範囲でも並べて整列する
-  function addAllVariants() {
-    const it = getItem(S.active) || sortedVisible()[0];
-    if (!it) { toast("先に図を選択（クリック）してください"); return; }
-    const shown = new Set(visible().filter((i) => i.chart === it.chart && effModel(i) === effModel(it)).map(effRegion));
-    let n = 0;
-    for (const r of regionsOf()) {
-      if (shown.has(r) || !has(effModel(it), r, it.chart)) continue;
-      S.items.push(newItem(it.chart, { region: r, model: it.model, primary: false, w: it.w }));
-      n++;
-    }
-    if (!n) { toast("この図は、全ての表示範囲で既に並んでいます"); return; }
-    refresh(); tile();
-    toast(`${SHORT[it.chart] || it.chart} を ${n} 範囲ぶん追加しました`);
   }
 
   // 選択中の図を、他のモデルでも（同じ表示範囲で）並べて整列する＝モデル比較
@@ -455,7 +411,7 @@
     const existed = !!p[name];
     p[name] = { items: JSON.parse(JSON.stringify(S.items)), model: S.model, region: S.region, savedAt: Date.now() };
     localStorage.setItem(LS_PRESETS, JSON.stringify(p));
-    buildPresetSel(name);
+    buildPresetSel();   // 選択を空に戻す（同じ名前を選び直しても「変更」にならず呼び出せない、を防ぐ）
     toast(existed ? `「${name}」を上書き登録しました` : `「${name}」を登録しました`);
   }
 
@@ -467,10 +423,11 @@
     S.seq = Math.max(S.seq, ...S.items.map((i) => +String(i.id).slice(1) || 0));
     S.zTop = Math.max(1, ...S.items.map((i) => i.z || 1));
     if (pr.model && modelKeys().includes(pr.model)) { S.model = pr.model; $("modelSel").value = S.model; }
-    if (pr.region && regionsOf().includes(pr.region)) { S.region = pr.region; $("regionSel").value = S.region; }
+    if (pr.region && regionsOf().includes(pr.region)) S.region = pr.region;
     ensurePrimaries();
     fixFt(); buildToggles(); refresh();
     $("presetName").value = name;
+    $("presetSel").value = "";   // 呼び出し後は選択を空に戻す（もう一度同じ配置を選べるように）
     toast(`「${name}」を呼び出しました`);
   }
 
@@ -534,21 +491,8 @@
   }
 
   function rebuildRegionSelects() {
-    const sr = $("regionSel");
-    sr.innerHTML = "";
-    for (const r of regionsOf()) {
-      const o = document.createElement("option");
-      o.value = r; o.textContent = S.m.regions[r] || r;
-      sr.appendChild(o);
-    }
+    // 表示範囲の選択欄は無い（図ごとに範囲は1つ）。全体の範囲が無効なら既定へ戻す
     if (!regionsOf().includes(S.region)) S.region = regionsOf().includes(REGION_DEFAULT) ? REGION_DEFAULT : regionsOf()[0];
-    sr.value = S.region;
-    sr.onchange = () => { S.region = sr.value; fixFt(); refresh(); };
-    for (const k in els) {
-      const v = els[k].sel.value, w = els[k].msel.value;
-      fillRegionSel(els[k].sel); els[k].sel.value = v;
-      fillModelSel(els[k].msel); els[k].msel.value = w;
-    }
   }
 
   function fixFt() {
@@ -592,7 +536,7 @@
     else if (k === "ArrowLeft") stepInit(-1, e.ctrlKey);
     else if (k === "p" || k === "P") play();
     else if (k === "s" || k === "S") stop();
-    else if (k === "t" || k === "T") tile();
+    else if (k === "t" || k === "T") tile(true);
     else if (k === "i" || k === "I") resetLayout();
     else if (k === "d" || k === "D") { document.body.classList.toggle("nobar"); fitBoard(); }
     else if (k === "h" || k === "H") $("help").hidden = !$("help").hidden;
@@ -602,8 +546,7 @@
     if (k.startsWith("Arrow")) stop(); // 矢印キーで再生停止（元アプリと同様）
   });
 
-  $("btnTile").onclick = tile;
-  $("btnVariants").onclick = addAllVariants;
+  $("btnTile").onclick = () => tile(true);   // 整列＝今の並びのまま重ならないように敷き詰める（初期化とは別）
   $("btnModels").onclick = addAllModels;
   $("btnPlay").onclick = play;
   $("btnReset").onclick = resetLayout;
