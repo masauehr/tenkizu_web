@@ -57,6 +57,16 @@ def validate(kind, model, init_s, ft, q):
             raise CustomError("始点と終点が近すぎます（1度以上離してください）")
         if max(abs(p["lat2"] - p["lat1"]), abs(p["lon2"] - p["lon1"])) > 60.0:
             raise CustomError("断面が長すぎます（60度以内にしてください）")
+        # 表示要素: shade=色塗り（none/div/rh/omega）・contours=等値線（theta,ept,wind をカンマ区切り）・barbs=風矢羽（off/back/front）。
+        # 省略すると従来の見た目（発散＋温位・相当温位・断面平行風＋前面の矢羽）
+        import xsection
+        raw = q.get("contours")
+        try:
+            o = xsection.normalize_opts(dict(shade=q.get("shade") or None, barbs=q.get("barbs") or None,
+                                             contours=None if raw is None else [c for c in raw.split(",") if c]))
+        except ValueError as e:
+            raise CustomError(str(e))
+        p.update(shade=o["shade"], contours=",".join(o["contours"]), barbs=o["barbs"])
     else:
         p.update(lat=_num(q.get("lat"), "緯度", -15, 89), lon=_num(q.get("lon"), "経度", 0, 360))
     return p
@@ -92,8 +102,18 @@ def load_F(model, init_s, ft, fetch=True):
 def describe(p):
     """画面に出す名前（地点・断面線）。"""
     if p["kind"] == "xsection":
-        return f"断面 ({p['lat1']:g}N,{p['lon1']:g}E)→({p['lat2']:g}N,{p['lon2']:g}E)"
+        base = f"断面 ({p['lat1']:g}N,{p['lon1']:g}E)→({p['lat2']:g}N,{p['lon2']:g}E)"
+        if "shade" in p:                                    # 表示要素を選んだ図は、その説明も付ける
+            import xsection
+            base += " ｜ " + xsection.options_text(opts_of(p))
+        return base
     return f"エマグラム ({p['lat']:g}N,{p['lon']:g}E)"
+
+
+def opts_of(p):
+    """条件 p から、xsection.render_xsection に渡す表示要素の指定を作る。"""
+    return dict(shade=p.get("shade"), barbs=p.get("barbs"),
+                contours=None if p.get("contours") is None else [c for c in p["contours"].split(",") if c])
 
 
 def init_text(ik):
@@ -171,7 +191,7 @@ def render(p):
         if p["kind"] == "xsection":
             import xsection
             xsection.render_xsection(F, init, p["ft"], (p["lat1"], p["lon1"]), (p["lat2"], p["lon2"]), str(tmp),
-                                     model=label, name=describe(p))
+                                     model=label, name=describe(p).split(" ｜ ")[0], opts=opts_of(p))
         else:
             import emagram
             try:

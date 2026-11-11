@@ -29,6 +29,7 @@
   }
   function applyKind() {
     $("rowX").hidden = kind() !== "xsection";
+    $("rowOpt").hidden = kind() !== "xsection";                       // 表示要素の選択は断面だけ
     $("rowE").hidden = kind() !== "emagram";
     buildPresets(); clickStep = 0; mapHint(); drawMap();
   }
@@ -210,6 +211,11 @@
   $("go").onclick = async () => {
     const q = new URLSearchParams({ kind: kind(), model: $("model").value, init: $("init").value, ft: $("ft").value });
     for (const id of kind() === "xsection" ? ["lat1", "lon1", "lat2", "lon2"] : ["lat", "lon"]) q.set(id, $(id).value);
+    if (kind() === "xsection") {                                       // 断面の表示要素（色塗り・等値線・風矢羽）
+      q.set("shade", document.querySelector("input[name=shade]:checked").value);
+      q.set("contours", [...document.querySelectorAll("input[name=cont]:checked")].map((e) => e.value).join(","));
+      q.set("barbs", document.querySelector("input[name=barbs]:checked").value);
+    }
     $("go").disabled = true; $("msg").className = ""; $("msg").textContent = "作図中…（データ取得が入ると1分ほどかかります）";
     try {
       const r = await fetch("api/custom?" + q);

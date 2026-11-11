@@ -47,6 +47,21 @@
       <span>始点 緯度 <input type="number" id="lat1" value="45" step="0.5"> 経度 <input type="number" id="lon1" value="130" step="0.5"></span>
       <span>終点 緯度 <input type="number" id="lat2" value="25" step="0.5"> 経度 <input type="number" id="lon2" value="130" step="0.5"></span>
     </div>
+    <div class="row" id="rowOpt">
+      <span>色塗り:
+        <label><input type="radio" name="shade" value="none"> なし</label>
+        <label><input type="radio" name="shade" value="div"> 発散</label>
+        <label><input type="radio" name="shade" value="rh" checked> 湿り（相対湿度）</label>
+        <label><input type="radio" name="shade" value="omega"> 上昇流（ω）</label></span>
+      <span>等値線:
+        <label><input type="checkbox" name="cont" value="theta" checked> 温位</label>
+        <label><input type="checkbox" name="cont" value="ept" checked> 相当温位</label>
+        <label><input type="checkbox" name="cont" value="wind"> 断面平行風</label></span>
+      <span>風矢羽:
+        <label><input type="radio" name="barbs" value="off"> なし</label>
+        <label><input type="radio" name="barbs" value="back" checked> 背景（薄い灰色）</label>
+        <label><input type="radio" name="barbs" value="front"> 前面（黒）</label></span>
+    </div>
     <div class="row" id="rowE" hidden>
       <span>緯度 <input type="number" id="lat" value="35.7" step="0.1"> 経度 <input type="number" id="lon" value="139.7" step="0.1"></span>
     </div>
