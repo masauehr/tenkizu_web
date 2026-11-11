@@ -3,7 +3,11 @@ name: deploy-web
 # 画面（web/）を直したときに、**画像を作らず**画面ファイルだけを公開ブランチ(gh-pages)へ反映する（数十秒）。
 # 画像・manifest は触らない。モデルの作図は update-model.yml が行う。
 on:
-  # push 時の自動反映は、公開を始めるときに有効にする（paths: web/** と publish.py の main への push）
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "publish.py"
   workflow_dispatch:
 
 permissions:

@@ -1,7 +1,7 @@
 # 公開の手順（GitHub Pages・gh-pages 方式）
 
 仕組みは [nwp_chart_web の PUBLISH.md](https://github.com/masauehr/nwp_chart_web/blob/main/PUBLISH.md) と同じです（CIで作図 → 画像だけを `gh-pages` ブランチへ1コミットで反映 → Pages で配信）。
-**現在は公開を始めていません**（ワークフローは手動実行のみ・自動実行は無効）。
+**2026-11-11 に公開を開始**。定期実行は 12Z初期値が揃う時間帯（UTC 17〜23時の :30、1日7回）、`web/**` の push は自動反映。
 
 ## 公開するもの・しないもの
 - 公開: ECMWF・GFS（`nwp_data.MODELS` の `publish_hours` / `publish_keep`）。地域は日本周辺・北半球・鉛直断面（固定: 130E・140E）・エマグラム（固定5地点）。
