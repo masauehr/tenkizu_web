@@ -15,6 +15,9 @@
   #msg.err { color:#c02020; }
   #result img { display:block; max-width:100%; height:auto; border:1px solid var(--line); background:#fff; margin-top:10px; }
   .note { color:#556; font-size:12px; }
+  #hist { margin:8px 0; display:flex; flex-wrap:wrap; gap:4px 6px; align-items:center; }
+  #hist .note { width:100%; }
+  #hist button { font-size:12px; }
   #disk { font-size:12px; color:#556; margin:6px 0; }
   #disk .warn { color:#c02020; font-weight:bold; }
   #mapWrap { position:relative; width:100%; max-width:600px; }
@@ -54,6 +57,7 @@
     <div class="row"><button id="go">作図</button><span id="msg"></span></div>
   </div>
   <div id="disk"></div>
+  <div id="hist"></div>
   <div id="result"></div>
 </main>
 <script src="custom.js"></script>

@@ -145,6 +145,40 @@
   }
   showDisk();
 
+  // ---------- 作図結果の履歴（直近10件）。通常版の「別の図を並べる」の右の図でも選べる
+  const LS_HIST = "tenkizu_custom_history", MAX_HIST = 10;
+  const getHist = () => { try { const a = JSON.parse(localStorage.getItem(LS_HIST)); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
+  function addHist(item) {
+    const h = [item, ...getHist().filter((x) => x.url !== item.url)].slice(0, MAX_HIST);   // 同じ条件（同じ画像）は先頭へ移す
+    try { localStorage.setItem(LS_HIST, JSON.stringify(h)); } catch (e) { /* 保存できない環境では並べる機能が使えないだけ */ }
+    renderHist();
+  }
+  const histText = (c) => `${c.label}（${c.model} ${c.initText} ＋${c.ft}h）`;
+  // 結果の画像と「平面図と並べて見る」のリンクを出す
+  function showResult(c) {
+    const base = c.url.split("/").pop();
+    const link = c.mk ? `./#model=${c.mk}&init=${c.ik}&region=japan&chart=fax57&ft=${c.ft}&fig=1&region2=custom&chart2=${encodeURIComponent(base)}`
+                      : `./#region=japan&chart=fax57&fig=1&region2=custom&chart2=${encodeURIComponent(base)}`;
+    $("result").innerHTML = `<p><a href="${link}" target="_blank" rel="noopener">平面図（FAX57）と並べて見る（通常版を開く）</a>` +
+      `<span class="note">　通常版の「別の図を並べる」で、右の図を選び直せます</span></p><img alt="${histText(c)}" src="${c.url}">`;
+  }
+  function renderHist() {
+    const h = getHist(), box = $("hist");
+    box.innerHTML = "";
+    if (!h.length) return;
+    const t = document.createElement("div"); t.className = "note";
+    t.textContent = `最近の作図（直近${MAX_HIST}件。通常版の「別の図を並べる」の右の図でも選べます）`;
+    box.appendChild(t);
+    for (const c of h) {
+      const b = document.createElement("button");
+      b.textContent = histText(c);
+      b.title = "この結果を表示する";
+      b.onclick = () => showResult(c);
+      box.appendChild(b);
+    }
+  }
+  renderHist();
+
   $("go").onclick = async () => {
     const q = new URLSearchParams({ kind: kind(), model: $("model").value, init: $("init").value, ft: $("ft").value });
     for (const id of kind() === "xsection" ? ["lat1", "lon1", "lat2", "lon2"] : ["lat", "lon"]) q.set(id, $(id).value);
@@ -155,17 +189,14 @@
       if (!r.ok) { $("msg").textContent = j.error || "作図できません"; $("msg").className = "err"; }
       else {
         $("msg").textContent = "完了";
-        // 直前の結果を保存し、通常版の「別の図を並べる」で右に出せるようにする（同じドメインの localStorage を共有する）
+        // 結果を履歴（直近10件）に保存し、通常版の「別の図を並べる」で右に出せるようにする（同じドメインの localStorage を共有する）
         const label = kind() === "xsection"
           ? `断面 (${q.get("lat1")}N,${q.get("lon1")}E)→(${q.get("lat2")}N,${q.get("lon2")}E)`
           : `エマグラム (${q.get("lat")}N,${q.get("lon")}E)`;
-        try {
-          localStorage.setItem("tenkizu_custom_last", JSON.stringify({ url: j.url, label, model: $("model").selectedOptions[0].textContent,
-            initText: $("init").selectedOptions[0].textContent, ft: +$("ft").value, ts: Date.now() }));
-        } catch (e) { /* 保存できない環境では並べる機能が使えないだけ */ }
-        const link = `./#model=${q.get("model")}&init=${q.get("init")}&region=japan&chart=fax57&ft=${q.get("ft")}&fig=1&region2=custom&chart2=last`;
-        $("result").innerHTML = `<p><a href="${link}" target="_blank" rel="noopener">平面図（FAX57）と並べて見る（通常版を開く）</a>` +
-          `<span class="note">　通常版の「別の図を並べる」で、右の図を選び直せます</span></p><img alt="" src="${j.url}">`;
+        const item = { url: j.url, label, model: $("model").selectedOptions[0].textContent, mk: q.get("model"), ik: q.get("init"),
+                       initText: $("init").selectedOptions[0].textContent, ft: +$("ft").value, ts: Date.now() };
+        addHist(item);
+        showResult(item);
       }
     } catch (e) { $("msg").textContent = "サーバーに接続できません（ローカルサーバーで開いてください）"; $("msg").className = "err"; }
     $("go").disabled = false;

@@ -70,14 +70,21 @@
   const chartsAvail = (region) => byChart([...new Set(shownModels().flatMap((m) => Object.keys(regionMap(m)[region] || {})))]);
 
   // ---------- 別の図を並べる: 右に、同じモデル・初期値・予報時間の別の地域・図（平面図と断面図など）、
-  // またはローカルの自由選択で作った最新の結果を出す。自由選択のページが保存した結果を localStorage から読む
-  const LS_CUSTOM = "tenkizu_custom_last";
-  const customLast = () => { try { return JSON.parse(localStorage.getItem(LS_CUSTOM)); } catch (e) { return null; } };
+  // またはローカルの自由選択で作った結果（直近10件）を出す。自由選択のページが保存した履歴を localStorage から読む
+  const LS_CUSTOM = "tenkizu_custom_history";          // 新しい順の配列。最大10件（自由選択のページが書き込む）
+  const customList = () => {
+    try { const a = JSON.parse(localStorage.getItem(LS_CUSTOM)); if (Array.isArray(a)) return a; } catch (e) { /* 無視 */ }
+    try { const o = JSON.parse(localStorage.getItem("tenkizu_custom_last")); if (o && o.url) return [o]; } catch (e) { /* 無視 */ }   // 旧形式（最新の1件）
+    return [];
+  };
+  const customBase = (c) => c.url.split("/").pop();    // 画像のファイル名（選択欄の値・URLの chart2 に使う）
+  const customFind = (chart) => { const l = customList(); return chart === "last" ? (l[0] || null) : (l.find((c) => customBase(c) === chart) || null); };
   // 自由選択は、ローカルサーバーで開いているとき（作図の有無にかかわらず）か、作図済みの結果があるときに選べる
-  const regions2Avail = () => [...regionsAvail(), ...(S.local || customLast() ? ["custom"] : [])];
-  const charts2Avail = (region) => (region === "custom" ? ["last"] : chartsAvail(region));
+  const regions2Avail = () => [...regionsAvail(), ...(S.local || customList().length ? ["custom"] : [])];
+  const charts2Avail = (region) => (region === "custom" ? (customList().length ? customList().map(customBase) : ["last"]) : chartsAvail(region));
+  const customText = (c) => `${c.label}（${c.model} ${c.initText} ＋${c.ft}h）`;
   const chartLabel2 = (region, chart) => {
-    if (region === "custom") { const c = customLast(); return "最新の作図結果" + (c ? "：" + c.label : ""); }
+    if (region === "custom") { const c = customFind(chart); return c ? customText(c) : "自由選択（まだ作図していません）"; }
     return S.manifest.charts[chart] || chart;
   };
   function defaultFig() {      // 左が断面でなければ断面（130E）、断面なら平面図の先頭を右に出す
@@ -87,6 +94,7 @@
   }
   function validFig() {
     if (!regions2Avail().includes(S.region2)) { defaultFig(); return; }
+    if (S.region2 === "custom" && S.chart2 === "last" && customList().length) S.chart2 = customBase(customList()[0]);   // 「最新」は先頭の画像に置き換える
     const cs = charts2Avail(S.region2);
     if (!cs.includes(S.chart2)) S.chart2 = firstChart(S.region2, cs);
   }
@@ -324,7 +332,7 @@
   // 別の図を並べる: 右の枠。自由選択（ローカル）の結果なら、保存された画像をそのまま出す（予報時間とは連動しない）
   function renderFig() {
     if (S.region2 !== "custom") return renderView(2, S.model, S.region2, S.chart2);
-    const c = customLast(), img = $("chartImg2"), nodata = $("noData2");
+    const c = customFind(S.chart2), img = $("chartImg2"), nodata = $("noData2");
     if (!c) {
       nodata.innerHTML = "まだ自由選択（断面図・エマグラム）で作図していません。<a href=\"custom.html\">自由選択のページ</a>で作図すると、ここに並べて表示できます。";
       nodata.hidden = false; img.removeAttribute("src"); return null;
@@ -343,7 +351,7 @@
     return head + `初期値 ${fmt(parseInit(r.init), 0, "UTC")} ＋${r.ft}h${note}`;
   }
   function capCustom() {
-    const c = customLast();
+    const c = customFind(S.chart2);
     return c ? `<b>自由選択（断面図・エマグラム）</b> ｜ ${esc(c.label)} ｜ ${esc(c.model)} 初期値 ${esc(c.initText)} ＋${c.ft}h（作図済みの画像。予報時間とは連動しません）`
              : "<b>自由選択（断面図・エマグラム）</b> ｜ 未作図";
   }
@@ -591,9 +599,14 @@
 
   // manifest が更新されていたら、画面を開き直したとき・タブに戻ったときに取り込む
   // 自由選択のページ（別のタブ）で作図したら、右の図の選択肢と表示を更新する
-  const refreshCustom = () => { if (S.fig) { buildFigSelects(); update(); } };
-  window.addEventListener("storage", (e) => { if (e.key === LS_CUSTOM) refreshCustom(); });
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.fig && S.region2 === "custom") refreshCustom(); });
+  // newest=true（別のタブで新しく作ったとき）は、右の図を最新の結果に切り替える。タブに戻っただけのときは今の選択を保つ
+  const refreshCustom = (newest) => {
+    if (!S.fig) return;
+    if (newest && S.region2 === "custom") S.chart2 = "last";
+    buildFigSelects(); update();
+  };
+  window.addEventListener("storage", (e) => { if (e.key === LS_CUSTOM) refreshCustom(true); });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.fig && S.region2 === "custom") refreshCustom(false); });
 
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState !== "visible" || !S.manifest) return;
