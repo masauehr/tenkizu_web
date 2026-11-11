@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- 公開サイト（gh-pages）で GitHub Actions が作った画像（ECMWF・GFS）を、30分おきに手元の output/ へ取り込む。
+       公開側に変更が無ければ数秒で終わる。ログ: logs/sync.log
+       登録: cp このファイル ~/Library/LaunchAgents/ && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.masahiro.tenkizu_web_sync.plist
+       止める: launchctl bootout gui/$(id -u)/com.masahiro.tenkizu_web_sync -->
+  <key>Label</key><string>com.masahiro.tenkizu_web_sync</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/anaconda3/envs/met_env_310/bin/python</string>
+    <string>/Users/masahiro/projects/tenkizu_web/sync_public.py</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/masahiro/projects/tenkizu_web</string>
+  <key>StartInterval</key><integer>1800</integer>
+  <key>RunAtLoad</key><false/>
+  <key>StandardOutPath</key><string>/Users/masahiro/projects/tenkizu_web/logs/sync.log</string>
+  <key>StandardErrorPath</key><string>/Users/masahiro/projects/tenkizu_web/logs/sync.log</string>
+</dict>
+</plist>

@@ -124,7 +124,7 @@ def legal_text(model: str, year: int, accessed: str) -> dict:
 ECM_BASE = "https://data.ecmwf.int/forecasts"
 GFS_BASE = "https://noaa-gfs-bdp-pds.s3.amazonaws.com"
 
-PLEVELS = (975, 925, 850, 700, 500, 300, 200)  # 存在する面だけが使われる（ECMWFオープンデータに975は無い）。200hPaはjet200用
+PLEVELS = (1000, 975, 925, 850, 700, 600, 500, 400, 300, 250, 200, 150, 100)  # 存在する面だけが使われる（ECMWFオープンデータに975は無い）。断面図・エマグラムの鉛直解像度のため 2026-11-11 に 1000/600/400/250/150/100 を追加
 
 # 読み込み時に切り出す範囲（全地域の bbox の和集合に余白を足したもの）。全球のまま処理すると遅い
 CROP = dict(lon0=0.0, lon1=360.0, lat0=-15.0, lat1=90.0)   # 極座標図のため北半球全体（経度は全周）

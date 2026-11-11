@@ -301,7 +301,7 @@ def legend_box(ax, boxes, labels, center=False, rect=(0.724, 0.008, 0.272, 0.078
     for k, lab in enumerate(labels):
         # center=True: 各ボックスの中央に区分名を書く（日本語は和文フォントへフォールバック）
         ia.text(x0 + (k + 0.5 if center else k) * w, 0.30, lab, ha="center", va="center", fontsize=7,
-                family=["Hiragino Sans", "Arial Unicode MS", "DejaVu Sans"])
+                family=["Hiragino Sans", "Noto Sans CJK JP", "Arial Unicode MS", "DejaVu Sans"])
 
 
 # ---------------------------------------------------------------- 各図の描画

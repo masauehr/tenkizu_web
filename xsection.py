@@ -155,7 +155,7 @@ def render_xsection(F, init, ft, start, end, outpath, model="", name="", quantiz
 
     ax.set_yscale("log")
     ax.set_ylim(1000, lev.min())
-    ticks = [t for t in (1000, 925, 850, 700, 500, 400, 300, 250, 200) if t >= lev.min() - 1]
+    ticks = [t for t in (1000, 925, 850, 700, 500, 400, 300, 250, 200, 150, 100) if t >= lev.min() - 1]
     ax.set_yticks(ticks)
     ax.set_yticklabels([str(t) for t in ticks])
     ax.minorticks_off()
@@ -168,10 +168,10 @@ def render_xsection(F, init, ft, start, end, outpath, model="", name="", quantiz
     # 凡例（右側）
     fig.text(0.79, 0.50, "黒: 温位 (K)\n赤: 相当温位 (K)\n青: 断面平行風 (kt)\n色: 水平発散\n    (赤=発散, 青=収束)\n矢羽: " +
              ("風 (kt)" if wind == "uv" else "断面平行/垂直 (kt)"),
-             fontsize=8, va="top", family=["Hiragino Sans", "Arial Unicode MS", "DejaVu Sans"])
+             fontsize=8, va="top", family=["Hiragino Sans", "Noto Sans CJK JP", "Arial Unicode MS", "DejaVu Sans"])
     cax = fig.add_axes([0.80, 0.28, 0.16, 0.014])
     cb = fig.colorbar(cf, cax=cax, orientation="horizontal")
-    cb.set_label("発散 (×1e-5 /s)", fontsize=7, family=["Hiragino Sans", "Arial Unicode MS", "DejaVu Sans"])
+    cb.set_label("発散 (×1e-5 /s)", fontsize=7, family=["Hiragino Sans", "Noto Sans CJK JP", "Arial Unicode MS", "DejaVu Sans"])
     cb.ax.tick_params(labelsize=6)
 
     # 小地図（500hPa高度＋断面位置）
@@ -190,7 +190,7 @@ def render_xsection(F, init, ft, start, end, outpath, model="", name="", quantiz
 
     valid = init + timedelta(hours=ft)
     fig.text(0.075, 0.955, name or f"断面 ({start[0]:g}N,{start[1]:g}E)→({end[0]:g}N,{end[1]:g}E)",
-             fontsize=13, family=["Hiragino Sans", "Arial Unicode MS", "DejaVu Sans"], va="center")
+             fontsize=13, family=["Hiragino Sans", "Noto Sans CJK JP", "Arial Unicode MS", "DejaVu Sans"], va="center")
     fig.text(0.775, 0.955, f"{valid:%m/%d %H}UTC", fontsize=13, family="serif", color="#5a3410",
              va="center", ha="right")
     fig.text(0.006, 0.012, f"{model} INIT:{init:%m/%d %H:%M}(UTC)".strip(), fontsize=9, va="bottom")

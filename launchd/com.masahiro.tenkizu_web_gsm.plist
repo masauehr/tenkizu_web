@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- GSM（ローカル専用）の自動取得: 00/12UTC初期値だけ、1時間おきに確認して揃っていれば取得・作図。
+       作成済みなら数秒で終わる。3日より古いPNGとGRIB2は削除する。
+       登録: cp このファイル ~/Library/LaunchAgents/ && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.masahiro.tenkizu_web_gsm.plist
+       止める: launchctl bootout gui/$(id -u)/com.masahiro.tenkizu_web_gsm -->
+  <key>Label</key><string>com.masahiro.tenkizu_web_gsm</string>
+  <key>ProgramArguments</key>
+  <array>
+    <!-- brew更新でpython3が切り替わる事故を避けるため、condaのPythonを絶対パスで指定 -->
+    <string>/opt/anaconda3/envs/met_env_310/bin/python</string>
+    <string>/Users/masahiro/projects/tenkizu_web/update_latest.py</string>
+    <string>--models</string><string>gsm</string>
+    <string>--init-hours</string><string>0</string><string>12</string>
+    <string>--keep-days</string><string>3</string>
+    <string>--jobs</string><string>4</string>
+    <string>--dl-jobs</string><string>6</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/masahiro/projects/tenkizu_web</string>
+  <key>StartInterval</key><integer>3600</integer>
+  <key>RunAtLoad</key><false/>
+  <key>StandardOutPath</key><string>/Users/masahiro/projects/tenkizu_web/logs/gsm_auto.log</string>
+  <key>StandardErrorPath</key><string>/Users/masahiro/projects/tenkizu_web/logs/gsm_auto.log</string>
+</dict>
+</plist>

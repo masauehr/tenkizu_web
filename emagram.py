@@ -20,7 +20,7 @@ STATIONS = {
     "47936": ("那覇", 26.21, 127.69),
 }
 
-JP_FONT = ["Hiragino Sans", "Arial Unicode MS", "DejaVu Sans"]
+JP_FONT = ["Hiragino Sans", "Noto Sans CJK JP", "Arial Unicode MS", "DejaVu Sans"]
 
 
 def _dewpoint(t_c, rh):
@@ -48,7 +48,7 @@ def profile_from_F(F, lat, lon):
             continue                      # 地面より下の層は使わない
         d = F["p"][lv]
         t = float(d["t"][iy, ix])
-        td = min(float(_dewpoint(t, float(d["r"][iy, ix]))), t)
+        td = min(float(_dewpoint(t, float(d["r"][iy, ix]))), t) if lv >= 300 else np.nan   # 上空の湿度は信頼できない
         rows.append((lv, t, td, float(d["u"][iy, ix]), float(d["v"][iy, ix]), float(d["gh"][iy, ix])))
     if len(rows) < 3:
         raise ValueError("地面より上の気圧面が3層未満です（高い山の上など）")
@@ -64,7 +64,10 @@ def refine(prof, step=10.0):
     lp, lpf = np.log(p)[::-1], np.log(pf)[::-1]
     out = {"p": pf}
     for k in ("T", "Td", "u", "v"):
-        out[k] = np.interp(lpf, lp, prof[k][::-1])[::-1]
+        y = prof[k][::-1]
+        ok = np.isfinite(y)
+        f = np.interp(lpf, lp[ok], y[ok], left=np.nan, right=np.nan)      # 有効な層の範囲だけ補間（外は NaN）
+        out[k] = f[::-1]
     return out
 
 
@@ -72,7 +75,8 @@ def diagnostics(fine):
     """最大相当温位の層（850hPa以下）から持ち上げた気塊の LCL・EL・CAPE・CIN。"""
     import metpy.calc as mpcalc
     from metpy.units import units
-    p, T, Td = fine["p"] * units.hPa, fine["T"] * units.degC, fine["Td"] * units.degC
+    td_fill = np.where(np.isfinite(fine["Td"]), fine["Td"], fine["T"])        # 露点が無い上空は飽和とみなす（気塊の診断に影響しない高さ）
+    p, T, Td = fine["p"] * units.hPa, fine["T"] * units.degC, td_fill * units.degC
     low = np.where(fine["p"] >= 850.0)[0]
     if low.size == 0:
         low = np.array([0])
@@ -104,16 +108,17 @@ def render_emagram(F, init, ft, lat, lon, outpath, model="", name="", quantize=T
     fig.subplots_adjust(top=0.90, bottom=0.115, left=0.09, right=0.95)
     skew = SkewT(fig, rotation=0, aspect=120)
     skew.ax.set_xlim(-70, 40)
-    skew.ax.set_ylim(1000, 200)
+    skew.ax.set_ylim(1000, 100)
     skew.ax.set_xlabel("Temperature (°C)")
     skew.ax.set_ylabel("Pressure (hPa)")
-    p, T, Td = fine["p"] * units.hPa, fine["T"] * units.degC, fine["Td"] * units.degC
+    p, T = fine["p"] * units.hPa, fine["T"] * units.degC
+    Td_plot = fine["Td"] * units.degC            # 300hPaより上は NaN（線が途切れる）
 
     skew.plot_dry_adiabats(t0=np.arange(203, 533, 10) * units.K, alpha=0.25, color="orangered")
     skew.plot_moist_adiabats(t0=np.arange(203, 400, 5) * units.K, alpha=0.25, color="tab:green")
-    skew.plot_mixing_lines(pressure=np.arange(1000, 199, -20) * units.hPa, linestyle="dotted", color="tab:blue")
+    skew.plot_mixing_lines(pressure=np.arange(1000, 99, -20) * units.hPa, linestyle="dotted", color="tab:blue")
     skew.plot(p, T, "r", linewidth=1.8, label="気温")
-    skew.plot(p, Td, "g", linewidth=1.8, label="露点温度")
+    skew.plot(p, Td_plot, "g", linewidth=1.8, label="露点温度")
     skew.plot(dg["pe"], dg["parcel"], "k", linewidth=2, alpha=0.55, label="持ち上げ気塊")
     skew.plot(p[dg["i0"]], T[dg["i0"]], "ko", markerfacecolor="black")
     skew.plot(dg["lcl_p"], dg["lcl_t"], "ko", markerfacecolor="blue")

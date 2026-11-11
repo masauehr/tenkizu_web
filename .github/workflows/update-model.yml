@@ -17,6 +17,10 @@ on:
         type: choice
         default: all
         options: [all, ecmwf, gfs]
+      force:
+        description: "作成済みの初期値も作り直す（図の見た目を直したときなど）"
+        type: boolean
+        default: false
 
 permissions:
   contents: write   # 公開ブランチ(gh-pages)へのpush
@@ -63,6 +67,12 @@ jobs:
       - name: 依存のインストール
         run: pip install -r requirements.txt
 
+      - name: 日本語フォント（図の中の日本語表示用）
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-cjk
+          python -c "import matplotlib.font_manager as fm; print([f.name for f in fm.fontManager.ttflist if 'CJK' in f.name][:3])"
+
       - name: Natural Earth（海岸線）のキャッシュ
         uses: actions/cache@v4
         with:
@@ -73,7 +83,7 @@ jobs:
         run: python publish.py --pull --model ${{ matrix.model }}
 
       - name: 最新初期値の取得と作図（${{ matrix.model }}）
-        run: python update_latest.py --models ${{ matrix.model }} --jobs 4 --dl-jobs 6
+        run: python update_latest.py --models ${{ matrix.model }} --jobs 4 --dl-jobs 6 ${{ inputs.force && '--force' || '' }}
 
       - name: 公開ブランチへ反映
         run: python publish.py --model ${{ matrix.model }}
