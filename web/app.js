@@ -12,7 +12,7 @@
   const OUT = "output/";
   const API = "api/";
   const HOUR = 3600e3;
-  const S = { manifest: null, model: null, model2: null, cmp: false, fig: false, region2: null, chart2: null, init: null, region: null, chart: null, ft: 0, timer: null };
+  const S = { manifest: null, local: false, model: null, model2: null, cmp: false, fig: false, region2: null, chart2: null, init: null, region: null, chart: null, ft: 0, timer: null };
   const cache = new Map(); // 先読み画像（再生を滑らかにする）
 
   const imgUrl = (model, init, region, chart, ft) =>
@@ -73,7 +73,8 @@
   // またはローカルの自由選択で作った最新の結果を出す。自由選択のページが保存した結果を localStorage から読む
   const LS_CUSTOM = "tenkizu_custom_last";
   const customLast = () => { try { return JSON.parse(localStorage.getItem(LS_CUSTOM)); } catch (e) { return null; } };
-  const regions2Avail = () => [...regionsAvail(), ...(customLast() ? ["custom"] : [])];
+  // 自由選択は、ローカルサーバーで開いているとき（作図の有無にかかわらず）か、作図済みの結果があるときに選べる
+  const regions2Avail = () => [...regionsAvail(), ...(S.local || customLast() ? ["custom"] : [])];
   const charts2Avail = (region) => (region === "custom" ? ["last"] : chartsAvail(region));
   const chartLabel2 = (region, chart) => {
     if (region === "custom") { const c = customLast(); return "最新の作図結果" + (c ? "：" + c.label : ""); }
@@ -325,7 +326,7 @@
     if (S.region2 !== "custom") return renderView(2, S.model, S.region2, S.chart2);
     const c = customLast(), img = $("chartImg2"), nodata = $("noData2");
     if (!c) {
-      nodata.textContent = "自由選択の結果がありません（「自由選択」のページで作図してください）";
+      nodata.innerHTML = "まだ自由選択（断面図・エマグラム）で作図していません。<a href=\"custom.html\">自由選択のページ</a>で作図すると、ここに並べて表示できます。";
       nodata.hidden = false; img.removeAttribute("src"); return null;
     }
     nodata.hidden = true;
@@ -343,8 +344,8 @@
   }
   function capCustom() {
     const c = customLast();
-    return c ? `<b>自由選択</b> ｜ ${esc(c.label)} ｜ ${esc(c.model)} 初期値 ${esc(c.initText)} ＋${c.ft}h（作図済みの画像。予報時間とは連動しません）`
-             : "<b>自由選択</b> ｜ 結果なし";
+    return c ? `<b>自由選択（断面図・エマグラム）</b> ｜ ${esc(c.label)} ｜ ${esc(c.model)} 初期値 ${esc(c.initText)} ＋${c.ft}h（作図済みの画像。予報時間とは連動しません）`
+             : "<b>自由選択（断面図・エマグラム）</b> ｜ 未作図";
   }
 
   // 比較モードの見出し: モデル名・初期値・予報時間（初期値が違う/刻みが合わない場合は分かるように）
@@ -565,7 +566,8 @@
       // 更新APIが無い（公開用の静的サイト）場合はボタンごと隠す
       $("btnUpdate").hidden = true; $("updateMsg").hidden = true; return;
     }
-    $("lnkCustom").hidden = false;                                   // 更新APIがある＝ローカルサーバー。自由選択ページへのリンクを出す
+    $("lnkCustom").hidden = false;
+    if (!S.local) { S.local = true; if (S.fig) buildFigSelects(); }   // ローカルサーバーと分かったら、右の図の選択肢に自由選択を加える                                   // 更新APIがある＝ローカルサーバー。自由選択ページへのリンクを出す
     const last = (j.log && j.log.length) ? j.log[j.log.length - 1] : "";
     if (j.running) {
       $("btnUpdate").disabled = true;
@@ -588,6 +590,11 @@
   };
 
   // manifest が更新されていたら、画面を開き直したとき・タブに戻ったときに取り込む
+  // 自由選択のページ（別のタブ）で作図したら、右の図の選択肢と表示を更新する
+  const refreshCustom = () => { if (S.fig) { buildFigSelects(); update(); } };
+  window.addEventListener("storage", (e) => { if (e.key === LS_CUSTOM) refreshCustom(); });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.fig && S.region2 === "custom") refreshCustom(); });
+
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState !== "visible" || !S.manifest) return;
     try {
