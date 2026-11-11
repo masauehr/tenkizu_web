@@ -94,6 +94,11 @@ def diagnostics(fine):
                 cape=float(cape.magnitude), cin=float(cin.magnitude))
 
 
+def map_extent(lat, lon, dlon=12.0, dlat=8.0):
+    """地点を中心にした小地図の範囲 (経度の西端, 東端, 緯度の南端, 北端)。緯度は ±90 度を超えないようにする。"""
+    return (lon - dlon, lon + dlon, max(-90.0, lat - dlat), min(90.0, lat + dlat))
+
+
 def render_emagram(F, init, ft, lat, lon, outpath, model="", name="", quantize=True):
     """エマグラムを1枚描画して outpath へ保存する。"""
     import nwp_charts as nc
@@ -105,7 +110,7 @@ def render_emagram(F, init, ft, lat, lon, outpath, model="", name="", quantize=T
     dg = diagnostics(fine)
     W, H = 9.5, 7.6
     fig = plt.figure(figsize=(W, H), dpi=nc.DPI)
-    fig.subplots_adjust(top=0.90, bottom=0.115, left=0.09, right=0.95)
+    fig.subplots_adjust(top=0.90, bottom=0.115, left=0.09, right=0.78)   # 右に地点の地図を置く
     skew = SkewT(fig, rotation=0, aspect=120)
     skew.ax.set_xlim(-70, 40)
     skew.ax.set_ylim(1000, 100)
@@ -147,9 +152,24 @@ def render_emagram(F, init, ft, lat, lon, outpath, model="", name="", quantize=T
                  transform=skew.ax.transAxes, fontsize=8, va="bottom", ha="left",
                  bbox={"boxstyle": "round,pad=0.3", "fc": "white", "alpha": 0.8})
 
+    # 地点の小地図（断面図と同じ作り）: 500hPa高度の線・海岸線・地点（赤い●）。緯度経度の数字では場所が分かりにくいため
+    import cartopy.crs as ccrs
+    PC = ccrs.PlateCarree()
+    ma = fig.add_axes([0.76, 0.58, 0.23, 0.32], projection=PC)
+    ma.set_extent(map_extent(lat, lon), crs=PC)
+    if 500 in F["p"]:
+        ma.contour(F["lons"], F["lats"], F["p"][500]["gh"], levels=np.arange(4800, 6000, 30),
+                   colors="#999999", linewidths=0.6, transform=PC)
+    ma.coastlines(resolution="50m", linewidth=0.6)
+    ma.gridlines(crs=PC, draw_labels=False, linewidth=0.4, color="#999999", alpha=0.7)
+    ma.plot([lon], [lat], marker="o", markersize=8, markerfacecolor="red", markeredgecolor="white", markeredgewidth=1.2,
+            linestyle="none", zorder=6, transform=PC)
+    ma.text(0.03, 0.04, f"{lat:.1f}N {lon:.1f}E", transform=ma.transAxes, fontsize=8, color="#a00000", va="bottom", ha="left", zorder=7,
+            bbox={"boxstyle": "round,pad=0.15", "fc": "white", "ec": "none", "alpha": 0.8})
+
     valid = init + timedelta(hours=ft)
     fig.text(0.09, 0.955, name or f"{lat:.2f}N {lon:.2f}E", fontsize=13, family=JP_FONT, va="center")
-    fig.text(0.95, 0.955, f"{valid:%m/%d %H}UTC", fontsize=13, family="serif", color="#5a3410",
+    fig.text(0.985, 0.955, f"{valid:%m/%d %H}UTC", fontsize=13, family="serif", color="#5a3410",
              va="center", ha="right")
     fig.text(0.09, 0.915, f"要求 {lat:.2f}N {lon:.2f}E / 格子 {prof['grid_lat']:.2f}N {prof['grid_lon']:.2f}E"
              f"（地表気圧 {prof['sp']:.0f}hPa）", fontsize=8, family=JP_FONT, va="center")
