@@ -361,10 +361,14 @@ def _read(path: Path):
             if lats is None:
                 la, lo = m.latlons()
                 la1, lo1 = la[:, 0], lo[0, :]
+                # 経度は 0〜360 に正規化して昇順に並べ替える（ECMWF のオープンデータは -180〜180 度で並び、pygrib/eccodes の版によっては
+                # そのまま返るため、0〜360 で切り出すと西半球が落ちる。2026-11-11 に公開版の極座標図が半分になって発覚）
+                lo1 = np.mod(lo1, 360.0)
+                order = np.argsort(lo1, kind="stable")
                 iy = np.where((la1 >= CROP["lat0"]) & (la1 <= CROP["lat1"]))[0]
-                ix = np.where((lo1 >= CROP["lon0"]) & (lo1 <= CROP["lon1"]))[0]
-                lats, lons = la1[iy[0]:iy[-1] + 1], lo1[ix[0]:ix[-1] + 1]
-            v = np.asarray(m.values, dtype=np.float32)[iy[0]:iy[-1] + 1, ix[0]:ix[-1] + 1]
+                ix = order[(lo1[order] >= CROP["lon0"]) & (lo1[order] <= CROP["lon1"])]
+                lats, lons = la1[iy[0]:iy[-1] + 1], lo1[ix]
+            v = np.asarray(m.values, dtype=np.float32)[iy[0]:iy[-1] + 1][:, ix]
             if key[0] == "p":
                 out["p"].setdefault(key[1], {})[key[2]] = v
             else:

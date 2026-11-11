@@ -54,7 +54,7 @@
   const regionsAvail = () => [...new Set(shownModels().flatMap((m) => Object.keys(regionMap(m))))];
   // 図種の並びは 高層→地上。公開側の manifest は次の更新まで古い順のままなので、画面側にも順を持つ（nwp_charts.CHARTS と同じ順）。
   // 未知の図種は末尾（manifest の順）
-  const CHART_ORDER = ["jet100", "jet200", "jet300", "t300", "z500", "t500", "t700", "ept850", "t850", "t925", "t975", "tenki", "surf"];
+  const CHART_ORDER = ["polar300", "polar500", "instab", "fax57", "fax78", "qvec850", "surffax", "xs130", "xs140", "em_47401", "em_47646", "em_47778", "em_47807", "em_47936"];
   const chartRank = (c) => {
     const i = CHART_ORDER.indexOf(c);
     return i >= 0 ? i : 100 + Object.keys(S.manifest.charts).indexOf(c);
@@ -425,8 +425,8 @@
       views.style.setProperty("--imgw", v === "wide" ? "100%" : v + "%");
     }
   }
-  try { const sv = localStorage.getItem("nwp_size"); if (sv && [...$("sizeSel").options].some((o) => o.value === sv)) $("sizeSel").value = sv; } catch (e) { /* 保存できない環境は既定のまま */ }
-  $("sizeSel").onchange = () => { try { localStorage.setItem("nwp_size", $("sizeSel").value); } catch (e) { /* 無視 */ } applySize(); };
+  try { const sv = localStorage.getItem("tenkizu_size"); if (sv && [...$("sizeSel").options].some((o) => o.value === sv)) $("sizeSel").value = sv; } catch (e) { /* 保存できない環境は既定のまま */ }
+  $("sizeSel").onchange = () => { try { localStorage.setItem("tenkizu_size", $("sizeSel").value); } catch (e) { /* 無視 */ } applySize(); };
   window.addEventListener("resize", applySize);
   applySize();
 

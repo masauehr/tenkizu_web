@@ -495,7 +495,9 @@ def render_polar(chart, F, init, ft, outpath, model="", quantize=True):
     W, H = 8.4, 8.4
     fig = plt.figure(figsize=(W, H), dpi=DPI)
     ax = fig.add_axes([0.01, 42 / (H * DPI), 0.98, 1 - 50 / (H * DPI)], projection=proj)
-    ax.set_extent([-180, 180, lat_min, 90], crs=PC)
+    # 表示範囲は投影座標で明示する（cartopy 0.26 では set_extent([-180,180,lat_min,90], crs=PC) が半球の一部に拡大されてしまうため）
+    R = float(np.hypot(*proj.transform_point(clon, lat_min, PC)))
+    ax.set_extent([-R, R, -R, R], crs=proj)
     ax.set_facecolor("#eaf4fb")
 
     w0, w1, ws = POLAR_WIND[lv]

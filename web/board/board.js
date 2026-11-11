@@ -12,19 +12,23 @@
   const MIN_W = IMG_W * 0.25, MAX_W = IMG_W * 2;          // 0.25〜2倍（元アプリと同じ）
   const OUT = "../output/";                                  // 画像・manifest（このページは board/ 配下）
   const API = "../api/";                                     // 更新API（ローカルサーバーのみ）
-  const LS_KEY = "nwpBoard.v1";                            // 配置の自動保存
-  const LS_PRESETS = "nwpBoard.presets.v1";                // 登録した配置
+  const LS_KEY = "tenkizuBoard.v1";   // 同じドメイン(masauehr.github.io)の nwp_chart_web の画用紙版と保存先を分ける（共有すると旧図種の配置が読み込まれて何も出ない）                            // 配置の自動保存
+  const LS_PRESETS = "tenkizuBoard.presets.v1";                // 登録した配置
   const pad = (n) => String(n).padStart(2, "0");
 
   // 並び順（高層→地上）。整列すると左上が最も高い高度、右下が地上(surf)になる。未知の図は末尾
-  const ORDER = ["jet100", "jet200", "jet300", "t300", "z500", "t500", "t700", "ept850", "t850", "t975", "t925", "tenki", "surf"];
-  const DEFAULT_ON = ["jet300", "z500", "t700", "t850", "t925", "surf"];
+  const ORDER = ["polar300", "polar500", "instab", "fax57", "fax78", "qvec850", "surffax", "xs130", "xs140", "em_47401", "em_47646", "em_47778", "em_47807", "em_47936"];
+  // 既定で表示しない図（断面は130Eだけ・エマグラムは那覇だけを出す。他は上部メニューで ON にできる）
+  const DEFAULT_OFF = ["xs140", "em_47401", "em_47646", "em_47778", "em_47807"];
+  const isDefaultOn = (c) => !DEFAULT_OFF.includes(c);
   const REGION_DEFAULT = "japan";
   // 上部メニューとパネル見出し用の短い名前
-  const SHORT = { surf: "地上降水", tenki: "天気", t975: "975", t925: "925", t850: "850", ept850: "850EPT",
-                  t700: "700", t500: "500気温", z500: "500高度", jet300: "300", jet200: "200", jet100: "100", t300: "300気温" };
-  const RSHORT = { japan: "日本周辺", okinawa: "沖縄周辺", asia: "東アジア", japan3: "日本域0.125°", okinawa3: "南西域0.125°" };
-  const RORDER = ["japan", "okinawa", "asia", "japan3", "okinawa3"];
+  const SHORT = { polar300: "北半球300", polar500: "北半球500", instab: "不安定域", fax57: "FAX57", fax78: "FAX78", qvec850: "Q850",
+                  surffax: "地上FAX", xs130: "断面130E", xs140: "断面140E", em_47401: "エマ稚内", em_47646: "エマ館野",
+                  em_47778: "エマ潮岬", em_47807: "エマ福岡", em_47936: "エマ那覇" };
+  const RSHORT = { japan: "日本周辺", okinawa: "沖縄周辺", asia: "東アジア", polar: "北半球", xsec: "断面", emagram: "エマグラム",
+                   japan3: "日本域0.125°", okinawa3: "南西域0.125°" };
+  const RORDER = ["japan", "okinawa", "asia", "polar", "xsec", "emagram", "japan3", "okinawa3"];
 
   // items: パネルの一覧。{id, chart, region(null=全体に揃う), model(null=全体に揃う), primary, on, x, y, w, z}
   //   primary=true: 上部メニューのON/OFFで操作する基本パネル。false: 広さ違いで増やした複製（✕で削除）
@@ -52,9 +56,14 @@
   const chartsOf = () => [...new Set(modelKeys().flatMap((m) => Object.values(regionMap(m)).flatMap((r) => Object.keys(r))))]
     .sort((a, b) => rank(ORDER, a) - rank(ORDER, b));
   const getItem = (id) => S.items.find((i) => i.id === id);
-  const effRegion = (it) => it.region || S.region;
   const effModel = (it) => it.model || S.model;
   const has = (model, region, chart) => !!((regionMap(model)[region] || {})[chart]);
+  // 範囲が「全体」の図は全体の表示範囲に揃う。ただし、その図が全体の範囲に無い場合（北半球・断面・エマグラムの図）は、その図がある範囲で出す
+  const effRegion = (it) => {
+    if (it.region) return it.region;
+    const m = effModel(it);
+    return has(m, S.region, it.chart) ? S.region : (regionsOf().find((r) => has(m, r, it.chart)) || S.region);
+  };
   // 予報時間 ft がその図に無いとき（刻みの粗い範囲）は、直前の予報時間、無ければ最小のものを使う
   const pickFt = (list, ft) => {
     if (list.includes(ft)) return ft;
@@ -374,7 +383,7 @@
   function resetLayout() {
     for (const k of Object.keys(els)) { els[k].root.remove(); delete els[k]; }
     S.items = [];
-    for (const c of chartsOf()) S.items.push(newItem(c, { on: DEFAULT_ON.includes(c) }));
+    for (const c of chartsOf()) S.items.push(newItem(c, { on: isDefaultOn(c) }));
     buildToggles(); refresh(); tile();
   }
 
@@ -622,10 +631,11 @@
     S.region = regs.includes(sv.region) ? sv.region : (regs.includes(REGION_DEFAULT) ? REGION_DEFAULT : regs[0]);
     S.ft = sv.ft || 0;
     S.seq = sv.seq || 0;
-    const fresh = !Array.isArray(sv.items) || !sv.items.length;
-    S.items = fresh ? [] : sv.items;
+    const fresh = !Array.isArray(sv.items) || !sv.items.some((i) => chartsOf().includes(i.chart));
+    const known = new Set(chartsOf());
+    S.items = fresh ? [] : sv.items.filter((i) => known.has(i.chart));   // 存在しない図種（古い保存データ）は捨てる
     S.zTop = Math.max(1, ...S.items.map((i) => i.z || 1));
-    if (fresh) for (const c of chartsOf()) S.items.push(newItem(c, { on: DEFAULT_ON.includes(c) }));
+    if (fresh) for (const c of chartsOf()) S.items.push(newItem(c, { on: isDefaultOn(c) }));
     ensurePrimaries();
     fixFt();
     buildSelects(); buildToggles(); buildPresetSel();
