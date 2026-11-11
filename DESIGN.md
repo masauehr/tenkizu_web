@@ -1,6 +1,6 @@
 # tenkizu_web 設計メモ（2026-11-11 開始・Phase1〜3 実装済み・2026-11-11 公開開始）
 
-tenkizu（CLIで天気図・断面図・エマグラムを描画）の成果を、Webアプリで見られるようにする新プロジェクト。
+tenkizu（CLIで天気図・断面図・エマグラムを描画）の成果を、Webアプリで見られるようにするプロジェクト。**使い方は [tenkizu-web.md](tenkizu-web.md)（マニュアル）を参照。このファイルは設計判断と経緯の記録。**
 仕組みは [nwp_chart_web](../nwp_chart_web/DESIGN.md) と同様（GitHub Actionsで作図 → 静的PNGをGitHub Pagesで配信）。
 
 ## 決定事項（ユーザー確認済み 2026-11-11）
@@ -33,32 +33,10 @@ tenkizu にあって **nwp_chart_web に無い**（本プロジェクトの新�
 | **鉛直断面図** | GSM_CrossSection.py | ポテンシャル温位・EPT・風 |
 | **エマグラム** | GRIB2_Emagram.py | 温位エマグラム含む |
 
-## 残りの要判断（Phase1以降）
-
-- 公開サイトの容量見積もり（Pages 1GB。別リポジトリなので nwp_chart_web とは別計上）
-- 東西断面線・ゾンデ地点の具体的な一覧
-- ローカル自由選択UI（地図上で地点クリック／断面線の2点指定 → server.py のAPIで作図）
-
-## 想定構成
-
-```
-tenkizu_web/
-├── charts.py        # 図種定義（CHARTS）。tenkizuスクリプトから描画部を移植
-├── xsection.py      # 断面図
-├── emagram.py       # エマグラム
-├── data.py          # ECMWF/GFS 部分取得（nwp_chart_webのコピー調整）、GSMはローカル
-├── update_latest.py / publish.py / build_site.py   # nwp_chart_web 同様
-├── server.py        # ローカル用（自由選択API・local_only）
-└── web/             # Vanilla JS / HTML / CSS
-```
-
-## フェーズ案
-
-- Phase0: 設計確定（上の要判断を決める）
-- Phase1: 新規図種（Qベクトル・不安定域・FAX）をECMWF/GFSで作図、ローカル表示
-- Phase2: 断面図（固定断面線＋ローカル自由選択）
-- Phase3: エマグラム（固定地点＋ローカル自由選択）
-- Phase4: GitHub Actions＋Pages公開（公開前に確認を取る）
+## フェーズ（全て完了）
+- Phase0 設計確定／Phase1 新規図種の作図／Phase2 断面図（固定＋ローカル自由選択）／Phase3 エマグラム（固定＋ローカル自由選択）／Phase4 GitHub Actions＋Pages公開。
+- ファイル構成は [tenkizu-web.md](tenkizu-web.md) の「ファイル構成」を参照（設計当初の想定構成から変わったため、ここには載せない）。
+- 今後の候補: 00Z・18Z の時間帯の定期実行、cron-job.org 化（GitHub schedule が遅れる場合）、東西断面、エマグラム地点の追加、GSM の過去分取得。
 
 ## 進捗
 
