@@ -4,11 +4,16 @@
 
 公開サイトは固定（xsection.SECTIONS・emagram.STATIONS）。こちらは server.py の /api/custom から呼ばれ、
 output/custom/ にPNGを作って返す（同じ条件なら作り直さない）。
+画像ごとに、条件（種類・モデル・初期値・予報時間・地点など）を書いた同名の .json を隣に置く。
+「最近の作図」の一覧は、この画像ファイル（と .json）から作る（ブラウザの保存には頼らない。別のブラウザでも同じ一覧になる）。
 データ: ECMWF/GFS は data/<model>/<初期値>/fNNN.grib2（無ければその場で取得して data/ に残す。1ステップ約20〜40MB）、
 GSM は手元にあるものだけ（自動取得しない。600MB と大きいため）。
 """
 import hashlib
+import json
+import os
 import re
+import time
 from datetime import timedelta
 from pathlib import Path
 
@@ -18,6 +23,7 @@ import nwp_data
 ROOT = Path(__file__).resolve().parent
 CUSTOM_DIR = ROOT / "output" / "custom"
 KINDS = ("xsection", "emagram")
+HIST_MAX = 10          # 「最近の作図」に出す件数
 
 
 class CustomError(ValueError):
@@ -83,10 +89,74 @@ def load_F(model, init_s, ft, fetch=True):
     return nwp_data.load_fields(model, path, None, 6, False)
 
 
+def describe(p):
+    """画面に出す名前（地点・断面線）。"""
+    if p["kind"] == "xsection":
+        return f"断面 ({p['lat1']:g}N,{p['lon1']:g}E)→({p['lat2']:g}N,{p['lon2']:g}E)"
+    return f"エマグラム ({p['lat']:g}N,{p['lon']:g}E)"
+
+
+def init_text(ik):
+    return f"{ik[:4]}-{ik[4:6]}-{ik[6:8]} {ik[8:]}Z"
+
+
+def meta_path(png):
+    return png.with_suffix(".json")
+
+
+def write_meta(out, p):
+    """画像の隣に、条件を書いた .json を置く（一覧と、通常版の見出しに使う）。"""
+    meta = dict(kind=p["kind"], mk=p["model"], ik=p["init"], ft=p["ft"], label=describe(p),
+                model=nwp_data.MODELS[p["model"]]["label"], initText=init_text(p["init"]),
+                params={k: v for k, v in p.items() if k not in ("kind", "model", "init", "ft")}, created=time.time())
+    meta_path(out).write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+
+
+_LEGACY = re.compile(r"(xsection|emagram)_([a-z0-9]+)_(\d{10})_(\d{3})_[0-9a-f]{12}\.png")
+
+
+def list_recent(limit=HIST_MAX):
+    """output/custom/ の画像を、新しく作った（または使った）順に limit 件返す。
+    .json があればその条件を、無ければ（以前に作った画像）ファイル名から分かる範囲を使う。"""
+    items = []
+    try:
+        files = [f for f in CUSTOM_DIR.glob("*.png") if not f.name.endswith(".tmp.png")]
+    except OSError:
+        return []
+    for f in files:
+        try:
+            ts = f.stat().st_mtime
+        except OSError:
+            continue
+        meta = None
+        try:
+            meta = json.loads(meta_path(f).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+        if meta is None:
+            m = _LEGACY.fullmatch(f.name)
+            if not m:
+                continue
+            kind, mk, ik, ft = m.group(1), m.group(2), m.group(3), int(m.group(4))
+            meta = dict(kind=kind, mk=mk, ik=ik, ft=ft,
+                        label=("断面" if kind == "xsection" else "エマグラム") + "（条件は不明）",
+                        model=nwp_data.MODELS.get(mk, {}).get("label", mk), initText=init_text(ik))
+        meta = dict(meta)
+        meta.update(url="output/custom/" + f.name, ts=ts)
+        meta.pop("params", None)
+        items.append(meta)
+    items.sort(key=lambda x: x["ts"], reverse=True)
+    return items[:limit]
+
+
 def render(p):
     """作図して PNG のパスを返す（同じ条件が既にあればそれを返す）。"""
     out = out_path(p)
     if out.exists():
+        now = time.time()                       # 使った画像を「最近」にする（一覧の先頭へ。ディスクの整理で消されにくくもなる）
+        os.utime(out, (now, now))
+        if not meta_path(out).exists():
+            write_meta(out, p)
         return out
     CUSTOM_DIR.mkdir(parents=True, exist_ok=True)
     init = nwp_data.parse_init(p["init"])
@@ -97,7 +167,7 @@ def render(p):
         if p["kind"] == "xsection":
             import xsection
             xsection.render_xsection(F, init, p["ft"], (p["lat1"], p["lon1"]), (p["lat2"], p["lon2"]), str(tmp),
-                                     model=label, name=f"断面 ({p['lat1']:g}N,{p['lon1']:g}E)→({p['lat2']:g}N,{p['lon2']:g}E)")
+                                     model=label, name=describe(p))
         else:
             import emagram
             try:
@@ -105,6 +175,7 @@ def render(p):
             except ValueError as e:
                 raise CustomError(str(e))
         tmp.replace(out)
+        write_meta(out, p)
     finally:
         tmp.unlink(missing_ok=True)
     disk_guard.prune_group("custom")   # 自由選択の画像が上限を超えたら、古いものから消す

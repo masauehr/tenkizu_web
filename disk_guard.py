@@ -115,6 +115,8 @@ def prune_group(key, limit_bytes=None):
         total -= size
         freed += size
         n += 1
+        if key == "custom":
+            p.with_suffix(".json").unlink(missing_ok=True)   # 自由選択の画像の条件ファイルも一緒に消す
         parent = p.parent                          # 空になった初期値のフォルダだけ消す（中身があれば消えない）
         if parent != ROOT / "data" and parent.parent.name in ("ecmwf", "gfs"):
             try:

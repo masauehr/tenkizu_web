@@ -6,6 +6,7 @@
   /output/   → output/（make_charts.py が作成したPNGとmanifest.json）
   POST /api/update  → 最新データを取得して作図（update_latest.py を裏で実行。ローカルからのみ）
   GET  /api/status  → 更新ジョブの状態とログ末尾
+  GET  /api/custom/list → 自由選択で作った画像の「最近の作図」（直近10件・新しい順。画像ファイルから作る）
   GET  /api/disk    → ローカルのディスク使用量と上限（disk_guard.py。ローカルからのみ）
   GET  /api/custom  → 任意の断面線・地点で断面図／エマグラムを作る（custom.py。ローカルからのみ）
                       ?kind=xsection&model=gfs&init=YYYYMMDDHH&ft=12&lat1=45&lon1=130&lat2=25&lon2=130
@@ -103,6 +104,10 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if path == "/api/custom":
             self._custom()
+            return
+        if path == "/api/custom/list":
+            if self._local_only():
+                self._json(200, {"items": custom.list_recent()})
             return
         if path == "/api/disk":
             if self._local_only():

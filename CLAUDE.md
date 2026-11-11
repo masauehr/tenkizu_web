@@ -20,6 +20,7 @@ tenkizu の CLI 作図（天気図・断面図・エマグラム）を Web で�
 - 北半球図（`render_polar`）の範囲は投影座標で指定する（cartopy 0.26 対応）。
 - 画用紙版の保存キーは `tenkizuBoard.v1`。**同じドメイン（masauehr.github.io）の nwp_chart_web と localStorage を共有する**ため、キー名を共通にしない。
 - ローカルのディスク: 自由選択で取得した GRIB2（`data/ecmwf`・`data/gfs`）と `output/custom` は `disk_guard.py` が上限を超えた分を古い順に削除する。**GSM のデータ（`data/gsm`）と作図済み画像は消さない**（警告のみ）。消す対象を増やすときは `groups()` の `prune` を確認する。
+- 自由選択の「最近の作図」は、`output/custom/` の画像と同名の `.json`（条件）から `/api/custom/list` が作る。ブラウザの localStorage に履歴を持たせない（別のブラウザで見えなくなる）。画像を消す処理は `.json` も一緒に消すこと。
 - ローカルサーバーの既定ポートは **8791**（nwp_chart_web は 8790。同時に動かせるよう分けてある）。
 - 公開サイトの容量は 1GB が目安（1初期値 約20MB）。公開個数・図種・地域を増やす前に見積もる。
 - 図の見た目を変えたら、公開側の既存画像は作り直さないと変わらない（Actions の update-model を `force=true` で手動実行）。

@@ -70,13 +70,17 @@
   const chartsAvail = (region) => byChart([...new Set(shownModels().flatMap((m) => Object.keys(regionMap(m)[region] || {})))]);
 
   // ---------- 別の図を並べる: 右に、同じモデル・初期値・予報時間の別の地域・図（平面図と断面図など）、
-  // またはローカルの自由選択で作った結果（直近10件）を出す。自由選択のページが保存した履歴を localStorage から読む
-  const LS_CUSTOM = "tenkizu_custom_history";          // 新しい順の配列。最大10件（自由選択のページが書き込む）
-  const customList = () => {
-    try { const a = JSON.parse(localStorage.getItem(LS_CUSTOM)); if (Array.isArray(a)) return a; } catch (e) { /* 無視 */ }
-    try { const o = JSON.parse(localStorage.getItem("tenkizu_custom_last")); if (o && o.url) return [o]; } catch (e) { /* 無視 */ }   // 旧形式（最新の1件）
-    return [];
-  };
+  // またはローカルの自由選択で作った結果（直近10件）を出す。一覧はサーバー（/api/custom/list）が output/custom/ の画像ファイルから作る
+  // （ブラウザの保存には頼らない。別のブラウザでも、サイトデータを消しても同じ一覧になる）
+  let customCache = [];                                // サーバーが返した一覧（新しい順・最大10件）
+  const customList = () => customCache;
+  async function loadCustom() {                        // 取得できたか（＝ローカルサーバーか）を返す
+    try {
+      const j = await (await fetch(API + "custom/list", { cache: "no-store" })).json();
+      customCache = Array.isArray(j.items) ? j.items : [];
+      return Array.isArray(j.items);
+    } catch (e) { customCache = []; return false; }
+  }
   const customBase = (c) => c.url.split("/").pop();    // 画像のファイル名（選択欄の値・URLの chart2 に使う）
   const customFind = (chart) => { const l = customList(); return chart === "last" ? (l[0] || null) : (l.find((c) => customBase(c) === chart) || null); };
   // 自由選択は、ローカルサーバーで開いているとき（作図の有無にかかわらず）か、作図済みの結果があるときに選べる
@@ -161,6 +165,7 @@
     }
     $("updated").textContent = "更新 " + updatedUtc(m.updated);
 
+    S.local = await loadCustom();                     // ローカルサーバーなら自由選択の一覧が返る（公開サイトでは取得できない）
     const h = loadHash();
     const models = modelKeys();
     S.model = models.includes(h.model) ? h.model : models[0];
@@ -487,6 +492,7 @@
     S.fig = on;
     if (on) { S.cmp = false; if (!S.region2) defaultFig(); }
     applyCmpUi(); keepValid(); buildRegionBtns(); buildTabs(); update(); buildCredit();
+    if (on) refreshCustom(false);                  // 自由選択の一覧（サーバー）を読み直す
   }
 
   // 左右の入れ替え。予報有効時刻を保つため、右の解決結果（初期値・FT）を新しい左の基準にする
@@ -600,13 +606,17 @@
   // manifest が更新されていたら、画面を開き直したとき・タブに戻ったときに取り込む
   // 自由選択のページ（別のタブ）で作図したら、右の図の選択肢と表示を更新する
   // newest=true（別のタブで新しく作ったとき）は、右の図を最新の結果に切り替える。タブに戻っただけのときは今の選択を保つ
-  const refreshCustom = (newest) => {
+  // 別のタブ・別のブラウザで作図した結果も、サーバーの一覧から読み直して反映する。
+  // newest=true: 新しい画像が増えていたら、右の図をその最新に切り替える（タブに戻っただけのときは今の選択を保つ）
+  async function refreshCustom(newest) {
+    const before = customCache[0] && customBase(customCache[0]);
+    await loadCustom();
     if (!S.fig) return;
-    if (newest && S.region2 === "custom") S.chart2 = "last";
+    const after = customCache[0] && customBase(customCache[0]);
+    if (newest && S.region2 === "custom" && after && after !== before) S.chart2 = "last";
     buildFigSelects(); update();
-  };
-  window.addEventListener("storage", (e) => { if (e.key === LS_CUSTOM) refreshCustom(true); });
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.fig && S.region2 === "custom") refreshCustom(false); });
+  }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.fig) refreshCustom(true); });
 
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState !== "visible" || !S.manifest) return;

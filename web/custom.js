@@ -145,13 +145,12 @@
   }
   showDisk();
 
-  // ---------- 作図結果の履歴（直近10件）。通常版の「別の図を並べる」の右の図でも選べる
-  const LS_HIST = "tenkizu_custom_history", MAX_HIST = 10;
-  const getHist = () => { try { const a = JSON.parse(localStorage.getItem(LS_HIST)); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
-  function addHist(item) {
-    const h = [item, ...getHist().filter((x) => x.url !== item.url)].slice(0, MAX_HIST);   // 同じ条件（同じ画像）は先頭へ移す
-    try { localStorage.setItem(LS_HIST, JSON.stringify(h)); } catch (e) { /* 保存できない環境では並べる機能が使えないだけ */ }
-    renderHist();
+  // ---------- 作図結果の履歴（直近10件）。サーバーが output/custom/ の画像ファイルから作る一覧を読む
+  // （ブラウザの保存には頼らない。別のブラウザでも、サイトデータを消しても同じ。通常版の「別の図を並べる」の右の図でも選べる）
+  const MAX_HIST = 10;
+  async function getHist() {
+    try { const j = await (await fetch("api/custom/list", { cache: "no-store" })).json(); return Array.isArray(j.items) ? j.items : []; }
+    catch (e) { return []; }
   }
   const histText = (c) => `${c.label}（${c.model} ${c.initText} ＋${c.ft}h）`;
   // 結果の画像と「平面図と並べて見る」のリンクを出す
@@ -162,12 +161,12 @@
     $("result").innerHTML = `<p><a href="${link}" target="_blank" rel="noopener">平面図（FAX57）と並べて見る（通常版を開く）</a>` +
       `<span class="note">　通常版の「別の図を並べる」で、右の図を選び直せます</span></p><img alt="${histText(c)}" src="${c.url}">`;
   }
-  function renderHist() {
-    const h = getHist(), box = $("hist");
+  async function renderHist() {
+    const h = await getHist(), box = $("hist");
     box.innerHTML = "";
     if (!h.length) return;
     const t = document.createElement("div"); t.className = "note";
-    t.textContent = `最近の作図（直近${MAX_HIST}件。通常版の「別の図を並べる」の右の図でも選べます）`;
+    t.textContent = `最近の作図（直近${MAX_HIST}件・保存した画像ファイルから表示。通常版の「別の図を並べる」の右の図でも選べます）`;
     box.appendChild(t);
     for (const c of h) {
       const b = document.createElement("button");
@@ -189,14 +188,9 @@
       if (!r.ok) { $("msg").textContent = j.error || "作図できません"; $("msg").className = "err"; }
       else {
         $("msg").textContent = "完了";
-        // 結果を履歴（直近10件）に保存し、通常版の「別の図を並べる」で右に出せるようにする（同じドメインの localStorage を共有する）
-        const label = kind() === "xsection"
-          ? `断面 (${q.get("lat1")}N,${q.get("lon1")}E)→(${q.get("lat2")}N,${q.get("lon2")}E)`
-          : `エマグラム (${q.get("lat")}N,${q.get("lon")}E)`;
-        const item = { url: j.url, label, model: $("model").selectedOptions[0].textContent, mk: q.get("model"), ik: q.get("init"),
-                       initText: $("init").selectedOptions[0].textContent, ft: +$("ft").value, ts: Date.now() };
-        addHist(item);
-        showResult(item);
+        await renderHist();                        // サーバーの一覧（画像ファイル）を読み直す。いま作った画像が先頭に来る
+        const cur = (await getHist()).find((x) => x.url === j.url);
+        if (cur) showResult(cur); else $("result").innerHTML = `<img alt="" src="${j.url}">`;
       }
     } catch (e) { $("msg").textContent = "サーバーに接続できません（ローカルサーバーで開いてください）"; $("msg").className = "err"; }
     $("go").disabled = false;
