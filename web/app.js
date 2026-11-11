@@ -12,7 +12,7 @@
   const OUT = "output/";
   const API = "api/";
   const HOUR = 3600e3;
-  const S = { manifest: null, model: null, model2: null, cmp: false, init: null, region: null, chart: null, ft: 0, timer: null };
+  const S = { manifest: null, model: null, model2: null, cmp: false, fig: false, region2: null, chart2: null, init: null, region: null, chart: null, ft: 0, timer: null };
   const cache = new Map(); // 先読み画像（再生を滑らかにする）
 
   const imgUrl = (model, init, region, chart, ft) =>
@@ -56,7 +56,7 @@
   const CHART_ORDER = ["polar300", "polar500", "fax57", "fax78", "qvec850", "surffax", "instab", "xs130", "xs140", "em_47401", "em_47646", "em_47778", "em_47807", "em_47936"];
   // 地域ボタンの並びと表示名（日本周辺は平面図）。北半球が先頭＝初期表示（北半球300hPa）
   const REGION_ORDER = ["polar", "japan", "okinawa", "asia", "xsec", "emagram"];
-  const REGION_LABEL = { japan: "平面図" };
+  const REGION_LABEL = { japan: "平面図", custom: "自由選択（断面図・エマグラム）" };
   const regionLabel = (r) => REGION_LABEL[r] || S.manifest.regions[r] || r;
   // 地域を切り替えたときに最初に出す図（無ければ並びの先頭）。エマグラムは那覇
   const REGION_FIRST_CHART = { polar: "polar300", xsec: "xs130", emagram: "em_47936" };
@@ -68,6 +68,27 @@
   };
   const byChart = (list) => list.sort((a, b) => chartRank(a) - chartRank(b));
   const chartsAvail = (region) => byChart([...new Set(shownModels().flatMap((m) => Object.keys(regionMap(m)[region] || {})))]);
+
+  // ---------- 別の図を並べる: 右に、同じモデル・初期値・予報時間の別の地域・図（平面図と断面図など）、
+  // またはローカルの自由選択で作った最新の結果を出す。自由選択のページが保存した結果を localStorage から読む
+  const LS_CUSTOM = "tenkizu_custom_last";
+  const customLast = () => { try { return JSON.parse(localStorage.getItem(LS_CUSTOM)); } catch (e) { return null; } };
+  const regions2Avail = () => [...regionsAvail(), ...(customLast() ? ["custom"] : [])];
+  const charts2Avail = (region) => (region === "custom" ? ["last"] : chartsAvail(region));
+  const chartLabel2 = (region, chart) => {
+    if (region === "custom") { const c = customLast(); return "最新の作図結果" + (c ? "：" + c.label : ""); }
+    return S.manifest.charts[chart] || chart;
+  };
+  function defaultFig() {      // 左が断面でなければ断面（130E）、断面なら平面図の先頭を右に出す
+    const regs = regionsAvail();
+    S.region2 = regs.includes("xsec") && S.region !== "xsec" ? "xsec" : (regs.find((r) => r !== S.region) || S.region);
+    S.chart2 = firstChart(S.region2, charts2Avail(S.region2));
+  }
+  function validFig() {
+    if (!regions2Avail().includes(S.region2)) { defaultFig(); return; }
+    const cs = charts2Avail(S.region2);
+    if (!cs.includes(S.chart2)) S.chart2 = firstChart(S.region2, cs);
+  }
 
   // 予報時間 ft がその図に無いときは、直前の予報時間、無ければ最小のものを使う
   const pickFt = (list, ft) => {
@@ -108,7 +129,7 @@
   // ---------- URLハッシュ（リロード・共有で状態を保つ）
   function saveHash() {
     history.replaceState(null, "", `#model=${S.model}&init=${S.init}&region=${S.region}&chart=${S.chart}&ft=${S.ft}` +
-      (S.cmp ? `&cmp=1&model2=${S.model2}` : ""));
+      (S.cmp ? `&cmp=1&model2=${S.model2}` : "") + (S.fig ? `&fig=1&region2=${S.region2}&chart2=${S.chart2}` : ""));
   }
   function loadHash() {
     return Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
@@ -136,6 +157,8 @@
     S.model = models.includes(h.model) ? h.model : models[0];
     S.init = inits().some((i) => i.init === h.init) ? h.init : inits()[0].init;
     S.cmp = h.cmp === "1" && models.length > 1;
+    S.fig = h.fig === "1" && !S.cmp;
+    S.region2 = h.region2 || null; S.chart2 = h.chart2 || null;
     S.model2 = models.includes(h.model2) && h.model2 !== S.model ? h.model2 : (models.find((k) => k !== S.model) || null);
     const regs = regionsAvail();
     S.region = regs.includes(h.region) ? h.region : regs[0];
@@ -183,15 +206,31 @@
   // 比較モードの表示・非表示（2つ目のモデル欄、右の画像、幅）
   function applyCmpUi() {
     const multi = modelKeys().length > 1;
+    const dual = S.cmp || S.fig;                 // 左右に2枚並べる状態（2モデル比較 または 別の図を並べる）
     $("cmpChk").disabled = !multi;
     $("cmpChk").checked = S.cmp;
+    $("figChk").checked = S.fig;
     $("cmpBox").hidden = !S.cmp;
-    $("view2").hidden = !S.cmp;
-    $("cap1").hidden = !S.cmp;
-    document.body.classList.toggle("cmp", S.cmp);
+    $("figBox").hidden = !S.fig;
+    $("view2").hidden = !dual;
+    $("cap1").hidden = !dual;
+    document.body.classList.toggle("cmp", dual);
     $("modelLabel").textContent = S.cmp ? "左のモデル" : "モデル";
     if (S.cmp && S.model2) { $("model2Sel").value = S.model2; $("modelSel").value = S.model; }
+    if (S.fig) buildFigSelects();
   }
+
+  // 右の図（地域・図）の選択欄
+  function buildFigSelects() {
+    validFig();
+    const rs = $("region2Sel"), cs = $("chart2Sel");
+    rs.innerHTML = ""; cs.innerHTML = "";
+    for (const r of regions2Avail()) rs.add(new Option(regionLabel(r), r));
+    for (const c of charts2Avail(S.region2)) cs.add(new Option(chartLabel2(S.region2, c), c));
+    rs.value = S.region2; cs.value = S.chart2;
+  }
+  $("region2Sel").onchange = (e) => { S.region2 = e.target.value; S.chart2 = firstChart(S.region2, charts2Avail(S.region2)); buildFigSelects(); update(); };
+  $("chart2Sel").onchange = (e) => { S.chart2 = e.target.value; update(); };
 
   // 出典・ライセンス・免責・改変の表示（配信元の利用条件に基づく。文言は manifest.json から読む）
   const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -256,18 +295,20 @@
     if (!regs.includes(S.region)) S.region = regs[0];
     const charts = chartsAvail(S.region);
     if (!charts.includes(S.chart)) S.chart = firstChart(S.region, charts);
+    if (S.fig) validFig();
     const f = fts();
     if (f.length && !f.includes(S.ft)) S.ft = f.reduce((a, b) => (Math.abs(b - S.ft) < Math.abs(a - S.ft) ? b : a));
   }
 
   // ---------- 表示更新
   // 1つの画像枠（n=1:左 / n=2:右）を、model の図で更新する。解決できなければ「画像なし」。戻り値は解決結果。
-  function renderView(n, model) {
+  function renderView(n, model, region, chart) {
     const img = $(n === 1 ? "chartImg" : "chartImg2");
     const nodata = $(n === 1 ? "noData" : "noData2");
-    const r = resolve(model, S.region, S.chart, S.ft);
+    img.onerror = null;                           // 自由選択の画像用に付けた処理を残さない
+    const r = resolve(model, region, chart, S.ft);
     if (!r) {
-      const any = modelInits(model).some((i) => listAt(model, i.init, S.region, S.chart).length);
+      const any = modelInits(model).some((i) => listAt(model, i.init, region, chart).length);
       nodata.textContent = any ? "この予報時刻の画像なし（初期値が違うため時刻が合いません。→キーなどで時刻を進めてください）"
                                : "このモデルには、この図・範囲の画像がありません";
       nodata.hidden = false;
@@ -275,8 +316,35 @@
       return null;
     }
     nodata.hidden = true;
-    img.src = imgUrl(model, r.init, S.region, S.chart, r.ft);
+    img.src = imgUrl(model, r.init, region, chart, r.ft);
     return r;
+  }
+
+  // 別の図を並べる: 右の枠。自由選択（ローカル）の結果なら、保存された画像をそのまま出す（予報時間とは連動しない）
+  function renderFig() {
+    if (S.region2 !== "custom") return renderView(2, S.model, S.region2, S.chart2);
+    const c = customLast(), img = $("chartImg2"), nodata = $("noData2");
+    if (!c) {
+      nodata.textContent = "自由選択の結果がありません（「自由選択」のページで作図してください）";
+      nodata.hidden = false; img.removeAttribute("src"); return null;
+    }
+    nodata.hidden = true;
+    img.onerror = () => { nodata.textContent = "自由選択の画像が見つかりません（ディスクの整理で削除された可能性があります。もう一度作図してください）"; nodata.hidden = false; };
+    img.src = c.url;
+    return { custom: c };
+  }
+
+  // 別の図を並べるときの見出し（図の名前・モデル・初期値・予報時間）
+  function capFig(model, region, chart, r) {
+    const head = `<b>${esc(chartLabel2(region, chart))}</b> ｜ ${esc(labelOf(model))} ｜ `;
+    if (!r) return head + "画像なし";
+    const note = r.init !== S.init ? "（別の初期値・予報時刻を合わせて表示）" : (r.exact ? "" : `（FT${r.ft}h＝直前の予報時間）`);
+    return head + `初期値 ${fmt(parseInit(r.init), 0, "UTC")} ＋${r.ft}h${note}`;
+  }
+  function capCustom() {
+    const c = customLast();
+    return c ? `<b>自由選択</b> ｜ ${esc(c.label)} ｜ ${esc(c.model)} 初期値 ${esc(c.initText)} ＋${c.ft}h（作図済みの画像。予報時間とは連動しません）`
+             : "<b>自由選択</b> ｜ 結果なし";
   }
 
   // 比較モードの見出し: モデル名・初期値・予報時間（初期値が違う/刻みが合わない場合は分かるように）
@@ -294,8 +362,8 @@
     if (!f.includes(S.ft)) S.ft = f[0] ?? 0;
     slider.value = Math.max(f.indexOf(S.ft), 0);
 
-    const r1 = renderView(1, S.model);
-    const r2 = S.cmp && S.model2 ? renderView(2, S.model2) : null;
+    const r1 = renderView(1, S.model, S.region, S.chart);
+    const r2 = S.cmp && S.model2 ? renderView(2, S.model2, S.region, S.chart) : (S.fig ? renderFig() : null);
 
     // 保存リンク（左・右）
     if (r1) {
@@ -309,6 +377,16 @@
       if (r2) {
         $("dl2").href = imgUrl(S.model2, r2.init, S.region, S.chart, r2.ft);
         $("dl2").download = `${S.model2}_${r2.init}_${S.region}_${S.chart}_FT${r2.ft}.png`;
+      }
+    }
+
+    if (S.fig) {
+      $("cap1").innerHTML = capFig(S.model, S.region, S.chart, r1);
+      $("cap2Text").innerHTML = S.region2 === "custom" ? capCustom() : capFig(S.model, S.region2, S.chart2, r2);
+      if (r2 && r2.custom) { $("dl2").href = r2.custom.url; $("dl2").download = r2.custom.url.split("/").pop(); }
+      else if (r2) {
+        $("dl2").href = imgUrl(S.model, r2.init, S.region2, S.chart2, r2.ft);
+        $("dl2").download = `${S.model}_${r2.init}_${S.region2}_${S.chart2}_FT${r2.ft}.png`;
       }
     }
 
@@ -390,7 +468,15 @@
   // 2モデル比較の切り替え
   function setCmp(on) {
     S.cmp = on && modelKeys().length > 1;
+    if (S.cmp) S.fig = false;                     // 別の図を並べるとは同時に使えない
     if (S.cmp && (!S.model2 || S.model2 === S.model)) S.model2 = modelKeys().find((k) => k !== S.model);
+    applyCmpUi(); keepValid(); buildRegionBtns(); buildTabs(); update(); buildCredit();
+  }
+
+  // 別の図を並べる（2モデル比較とは同時に使えない）
+  function setFig(on) {
+    S.fig = on;
+    if (on) { S.cmp = false; if (!S.region2) defaultFig(); }
     applyCmpUi(); keepValid(); buildRegionBtns(); buildTabs(); update(); buildCredit();
   }
 
@@ -431,6 +517,7 @@
 
   $("speedSel").onchange = () => { if (S.timer) { play(); play(); } };
   $("cmpChk").onchange = (e) => setCmp(e.target.checked);
+  $("figChk").onchange = (e) => setFig(e.target.checked);
   $("btnSwap").onclick = swapModels;
 
   // 使い方（ヘルプ）
@@ -451,6 +538,7 @@
     else if (e.key === "Home") setIndex(0);
     else if (e.key === "End") setIndex(fts().length - 1);
     else if (e.key === "c" || e.key === "C") setCmp(!S.cmp);
+    else if (e.key === "f" || e.key === "F") setFig(!S.fig);
     else if (e.key === "h" || e.key === "H") toggleHelp();
     else return;
     e.preventDefault();

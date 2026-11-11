@@ -51,6 +51,8 @@ body.cmp #views { grid-template-columns:1fr 1fr; }
 .cmpToggle { display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
 #cmpBox { display:inline-flex; align-items:center; gap:8px; }
 #cmpBox[hidden] { display:none; }
+#figBox { display:inline-flex; align-items:center; gap:8px; }
+#figBox[hidden] { display:none; }
 #controls { display:flex; align-items:center; gap:8px; }
 #ftSlider { flex:1; min-width:80px; }
 #btnPlay { min-width:3.6em; }

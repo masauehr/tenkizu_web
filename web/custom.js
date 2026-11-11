@@ -153,7 +153,20 @@
       const r = await fetch("api/custom?" + q);
       const j = await r.json();
       if (!r.ok) { $("msg").textContent = j.error || "作図できません"; $("msg").className = "err"; }
-      else { $("msg").textContent = "完了"; $("result").innerHTML = `<img alt="" src="${j.url}">`; }
+      else {
+        $("msg").textContent = "完了";
+        // 直前の結果を保存し、通常版の「別の図を並べる」で右に出せるようにする（同じドメインの localStorage を共有する）
+        const label = kind() === "xsection"
+          ? `断面 (${q.get("lat1")}N,${q.get("lon1")}E)→(${q.get("lat2")}N,${q.get("lon2")}E)`
+          : `エマグラム (${q.get("lat")}N,${q.get("lon")}E)`;
+        try {
+          localStorage.setItem("tenkizu_custom_last", JSON.stringify({ url: j.url, label, model: $("model").selectedOptions[0].textContent,
+            initText: $("init").selectedOptions[0].textContent, ft: +$("ft").value, ts: Date.now() }));
+        } catch (e) { /* 保存できない環境では並べる機能が使えないだけ */ }
+        const link = `./#model=${q.get("model")}&init=${q.get("init")}&region=japan&chart=fax57&ft=${q.get("ft")}&fig=1&region2=custom&chart2=last`;
+        $("result").innerHTML = `<p><a href="${link}" target="_blank" rel="noopener">平面図（FAX57）と並べて見る（通常版を開く）</a>` +
+          `<span class="note">　通常版の「別の図を並べる」で、右の図を選び直せます</span></p><img alt="" src="${j.url}">`;
+      }
     } catch (e) { $("msg").textContent = "サーバーに接続できません（ローカルサーバーで開いてください）"; $("msg").className = "err"; }
     $("go").disabled = false;
     showDisk();
