@@ -39,7 +39,7 @@ MAP_ASPECT = (0.996 * 9.5) / (716 / 100)  # 地図部分の縦横比（幅/高�
 # ---------------------------------------------------------------- 地域定義
 # center: 投影中心(lon,lat)  width_km: 地図幅  bbox: データ切り出し範囲(lon0,lon1,lat0,lat1)
 REGIONS = {
-    "japan": dict(label="日本周辺", kind="lcc", center=(133.0, 36.0), width_km=4400,
+    "japan": dict(label="平面図", kind="lcc", center=(133.0, 36.0), width_km=4400,
                   bbox=(95, 180, 5, 68), barb_n=20, coast="10m", zoom=2),
     "okinawa": dict(label="沖縄周辺", kind="pc", center=(128.0, 27.0), width_deg=24.0,
                     bbox=(105, 152, 8, 46), barb_n=16, coast="10m", zoom=3, exclude=("jra55",)),   # JRA-55は1.25°と粗いので作らない

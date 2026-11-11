@@ -51,10 +51,15 @@
     const e = modelInits(model).find((i) => i.init === init);
     return ((((e || {}).regions || {})[region] || {})[chart]) || [];
   };
-  const regionsAvail = () => [...new Set(shownModels().flatMap((m) => Object.keys(regionMap(m))))];
+  const regionsAvail = () => [...new Set(shownModels().flatMap((m) => Object.keys(regionMap(m))))].sort((x, y) => regionRank(x) - regionRank(y));
   // 図種の並びは 高層→地上。公開側の manifest は次の更新まで古い順のままなので、画面側にも順を持つ（nwp_charts.CHARTS と同じ順）。
   // 未知の図種は末尾（manifest の順）
-  const CHART_ORDER = ["polar300", "polar500", "instab", "fax57", "fax78", "qvec850", "surffax", "xs130", "xs140", "em_47401", "em_47646", "em_47778", "em_47807", "em_47936"];
+  const CHART_ORDER = ["polar300", "polar500", "fax57", "fax78", "qvec850", "surffax", "instab", "xs130", "xs140", "em_47401", "em_47646", "em_47778", "em_47807", "em_47936"];
+  // 地域ボタンの並びと表示名（日本周辺は平面図）。北半球が先頭＝初期表示（北半球300hPa）
+  const REGION_ORDER = ["polar", "japan", "okinawa", "asia", "xsec", "emagram"];
+  const REGION_LABEL = { japan: "平面図" };
+  const regionLabel = (r) => REGION_LABEL[r] || S.manifest.regions[r] || r;
+  const regionRank = (r) => { const i = REGION_ORDER.indexOf(r); return i >= 0 ? i : 100; };
   const chartRank = (c) => {
     const i = CHART_ORDER.indexOf(c);
     return i >= 0 ? i : 100 + Object.keys(S.manifest.charts).indexOf(c);
@@ -133,7 +138,7 @@
     const regs = regionsAvail();
     S.region = regs.includes(h.region) ? h.region : regs[0];
     const charts = chartsAvail(S.region);
-    S.chart = charts.includes(h.chart) ? h.chart : charts[0];
+    S.chart = charts.includes(h.chart) ? h.chart : (charts.includes("polar300") ? "polar300" : charts[0]);   // 既定は北半球300hPa
     S.ft = +h.ft || 0;
 
     buildModelSel();
@@ -230,7 +235,7 @@
     box.innerHTML = "";
     for (const r of regionsAvail()) {
       const b = document.createElement("button");
-      b.textContent = S.manifest.regions[r] || r;
+      b.textContent = regionLabel(r);
       b.className = r === S.region ? "on" : "";
       b.onclick = () => { S.region = r; keepValid(); buildRegionBtns(); buildTabs(); update(); };
       box.appendChild(b);

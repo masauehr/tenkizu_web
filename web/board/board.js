@@ -17,16 +17,16 @@
   const pad = (n) => String(n).padStart(2, "0");
 
   // 並び順（高層→地上）。整列すると左上が最も高い高度、右下が地上(surf)になる。未知の図は末尾
-  const ORDER = ["polar300", "polar500", "instab", "fax57", "fax78", "qvec850", "surffax", "xs130", "xs140", "em_47401", "em_47646", "em_47778", "em_47807", "em_47936"];
-  // 既定で表示しない図（断面は130Eだけ・エマグラムは那覇だけを出す。他は上部メニューで ON にできる）
-  const DEFAULT_OFF = ["xs140", "em_47401", "em_47646", "em_47778", "em_47807"];
+  const ORDER = ["polar300", "polar500", "fax57", "fax78", "qvec850", "surffax", "instab", "xs130", "xs140", "em_47401", "em_47646", "em_47778", "em_47807", "em_47936"];
+  // 既定で表示しない図（断面は130E・140E、エマグラムは那覇だけを出す。他の地点は上部メニューで ON にできる）
+  const DEFAULT_OFF = ["em_47401", "em_47646", "em_47778", "em_47807"];
   const isDefaultOn = (c) => !DEFAULT_OFF.includes(c);
   const REGION_DEFAULT = "japan";
   // 上部メニューとパネル見出し用の短い名前
   const SHORT = { polar300: "北半球300", polar500: "北半球500", instab: "不安定域", fax57: "FAX57", fax78: "FAX78", qvec850: "Q850",
                   surffax: "地上FAX", xs130: "断面130E", xs140: "断面140E", em_47401: "エマ稚内", em_47646: "エマ館野",
                   em_47778: "エマ潮岬", em_47807: "エマ福岡", em_47936: "エマ那覇" };
-  const RSHORT = { japan: "日本周辺", okinawa: "沖縄周辺", asia: "東アジア", polar: "北半球", xsec: "断面", emagram: "エマグラム",
+  const RSHORT = { japan: "平面図", okinawa: "沖縄周辺", asia: "東アジア", polar: "北半球", xsec: "断面", emagram: "エマグラム",
                    japan3: "日本域0.125°", okinawa3: "南西域0.125°" };
   const RORDER = ["japan", "okinawa", "asia", "polar", "xsec", "emagram", "japan3", "okinawa3"];
 
@@ -361,7 +361,7 @@
   function tile() {
     const on = sortedVisible();
     if (!on.length) return;
-    const W = innerWidth, H = innerHeight - barH();
+    const W = innerWidth, H = innerHeight - barH() - ($("credit").offsetHeight + 8);   // 画面下の出典表示の分も引く（fitBoard と同じ。引かないと最下段が隠れる）
     let best = null;
     for (let cols = 1; cols <= on.length; cols++) {
       const rows = Math.ceil(on.length / cols);
