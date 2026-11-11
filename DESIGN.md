@@ -96,3 +96,12 @@ tenkizu_web/
 - **気圧面の追加**: `nwp_data.PLEVELS` に 1000/600/400/250/150/100hPa を追加（GSM も同様）。1ステップの取得量は ECMWF 約20→36MB、GFS 約38→71MB に増えた（PNG の容量は変わらない）。断面図は上端 100hPa、エマグラムは上端 100hPa（露点・相対湿度は 300hPa 以下だけ描く。それより上は湿度が信頼できないため）。
 - **日本語フォント**: CI（ubuntu）には日本語フォントが無く、図の中の日本語が四角になった。`fonts-noto-cjk` をCIで入れ、描画のフォント候補に `Noto Sans CJK JP` を追加。作り直しは Actions の `update-model` を `force=true` で手動実行する。
 - **ローカル定期更新（launchd）**: `launchd/com.masahiro.tenkizu_web_sync.plist`（30分おき・公開分を手元へ取り込み `sync_public.py`）と `com.masahiro.tenkizu_web_gsm.plist`（GSM を 00/12Z だけ1時間おきに確認・3日保管）。登録は PUBLISH.md の手順。
+
+## 不具合と対処の記録（2026-11-11 公開後）
+
+- **公開版の北半球図がおかしかった**: データ不足ではなく、原因は2つ。
+  1. ECMWF のオープンデータは経度が −180〜180 度で並ぶ。手元の conda 環境では 0〜360 で返るが、CI（pip の pygrib/eccodes）ではそのまま返り、0〜360 で切り出すと**西半球が落ちて半分**になった（GFS は 0〜359.75 度で影響なし）。→ `nwp_data._read` で経度を 0〜360 に正規化して昇順に並べ替える。
+  2. cartopy 0.26 では `set_extent([-180,180,lat_min,90], crs=PlateCarree)` が極座標で半球の一部に拡大される（0.25 では正常）。→ 投影座標で `[-R,R,-R,R]` を指定（R は lat_min の円の半径）。
+  - 検証: `uv venv --python 3.11` ＋ requirements.txt で CI 相当の環境（cartopy 0.26.0）を作り、修正前に再現・修正後に解消を確認した。CI 相当の環境は図の見た目を変える修正の前後で確認する。
+- **画用紙版が何も表示しなかった**: GitHub Pages は同じドメイン（masauehr.github.io）の下の全リポジトリで localStorage を共有する。nwp_chart_web の画用紙版が保存した配置（`nwpBoard.v1`）を読み込み、存在しない旧図種（jet300 など）を探していた。→ 保存キーを `tenkizuBoard.v1` に分離し、存在しない図種の保存データは捨てる。
+- **画用紙版の既定表示**: 全ての図を表示（北半球300/500・不安定域・FAX57/78・Q850・地上FAX）。断面は **130E**、エマグラムは **那覇** だけを出し、他の断面・地点は上部メニューで ON にできる。範囲が「全体」（日本周辺）に無い図（北半球・断面・エマグラム）は、その図がある範囲で出す（`effRegion`）。
