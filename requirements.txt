@@ -1,0 +1,11 @@
+# CI（GitHub Actions）やローカルで pip を使う場合の依存。conda(met_env_310)でも動く。
+numpy
+scipy
+matplotlib
+cartopy
+shapely
+pyproj
+pygrib
+metpy
+requests
+pillow

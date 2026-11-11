@@ -1,4 +1,4 @@
-# tenkizu_web 設計メモ（2026-11-11 開始・設計フェーズ）
+# tenkizu_web 設計メモ（2026-11-11 開始・Phase1 作図まで実装）
 
 tenkizu（CLIで天気図・断面図・エマグラムを描画）の成果を、Webアプリで見られるようにする新プロジェクト。
 仕組みは [nwp_chart_web](../nwp_chart_web/DESIGN.md) と同様（GitHub Actionsで作図 → 静的PNGをGitHub Pagesで配信）。
@@ -59,3 +59,20 @@ tenkizu_web/
 - Phase2: 断面図（固定断面線＋ローカル自由選択）
 - Phase3: エマグラム（固定地点＋ローカル自由選択）
 - Phase4: GitHub Actions＋Pages公開（公開前に確認を取る）
+
+## 進捗
+
+- **Phase1（作図部）完了 2026-11-11**: nwp_chart_web の作図の枠組み（`nwp_data.py` 部分取得・`nwp_charts.py` 描画部品・`make_charts.py`・`server.py`・`web/`）をコピーし、AIFS・JRA-55 を外した。
+  新規図種 4 つを実装し、ECMWF・GFS の実データ（2026-11-10 18UTC 初期値 FT12）で作図確認済み。
+
+| 図種 | キー | 内容 | 1枚の容量（実測） |
+|---|---|---|---|
+| Qベクトル | `qvec850` | 850hPa Q発散（シェード）・Q矢印・気温・高度 | 約130KB |
+| 不安定域 | `instab` | SEPT300 − maxEPT(850hPa以下)・300hPa気温 | 約95KB |
+| FAX57相当 | `fax57` | 500hPa気温・700hPa湿数 | 約210KB |
+| FAX78相当 | `fax78` | 850hPa気温・風・W/C・700hPa発散 | 約155KB |
+
+- 容量見積もり: 4図種×日本域×13FT（6時間毎・72h）≈ 7.5MB/初期値。公開5初期値で約40MB と小さく、アジア域の追加も余裕。
+- 平滑化回数は tenkizu（0.5°向け）を格子間隔で換算（`_passes`）。
+- 地域は当面 `japan` のみ。
+- **未実装（次）**: 画面（`web/` は nwp_chart_web のまま。AIFS・JRA-55・過去分取得の記述が残る）の整理、`update_latest.py`、`publish.py`／CI（Phase4）、北半球極座標図・地上FAX。

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>数値モデル天気図ボード（画用紙版）</title>
+<link rel="stylesheet" href="board.css">
+</head>
+<body>
+<div id="bar">
+  <!-- 1段目: 時刻・初期値・表示範囲・データ取得 -->
+  <div class="row">
+    <span id="dateLabel">読み込み中…</span>
+    <label>モデル(全体) <select id="modelSel"></select></label>
+    <label>初期値 <select id="initSel"></select></label>
+    <label title="既定では全ての図がこの範囲に揃います。図ごとに変える場合は各図の範囲欄で選びます">表示範囲(全体) <select id="regionSel"></select></label>
+    <button id="btnUpdate" title="RISHから最新データを取得して作図します">最新を取得</button>
+    <button id="btnSync" title="公開サイトで作られた最新の画像を、手元へ取り込みます（GFS・AIFS・ECMWF）">同期</button>
+    <span id="updateMsg"></span>
+    <a href="../" title="通常版ビューア">通常版</a>
+    <button id="btnHelp" title="操作説明 (H)">使い方</button>
+    <button id="btnLegal" title="データの出典・ライセンス・免責・改変の表示">出典・免責</button>
+  </div>
+  <!-- 2段目: 表示する図・配置・登録 -->
+  <div class="row">
+    <span id="chartToggles" role="group" aria-label="表示する図"></span>
+    <span class="sep"></span>
+    <button id="btnTile" title="表示中の図を画面に敷き詰める (T)">整列</button>
+    <button id="btnVariants" title="選択中の図を、他の全ての表示範囲でも並べる">広さ違い</button>
+    <button id="btnModels" title="選択中の図を、他のモデルでも同じ範囲で並べる（ECMWFとGFSの比較）">モデル違い</button>
+    <button id="btnPlay" title="再生/停止 (P / S)">▶</button>
+    <button id="btnReset" title="配置を初期化 (I)">初期化</button>
+    <span class="sep"></span>
+    <label>登録した配置 <select id="presetSel"></select></label>
+    <input id="presetName" type="text" placeholder="登録名" maxlength="30" size="10">
+    <button id="btnPresetSave" title="今の配置（図・表示範囲・位置・大きさ）を登録">登録</button>
+    <button id="btnPresetDel" title="選択中の登録を削除">削除</button>
+  </div>
+</div>
+
+<div id="board"></div>
+<div id="toast" hidden></div>
+<div id="credit"></div>
+<div id="legalPanel" hidden></div>
+
+<div id="help" hidden>
+  <h2>操作方法</h2>
+  <table>
+    <tr><th>↑ / ↓</th><td>予報時間 +1ステップ / −1ステップ（3または6時間）（Ctrl+↓: 最初、Ctrl+↑: 最後）</td></tr>
+    <tr><th>← / →</th><td>初期時刻を 前 / 次（Ctrl+←→: 予報有効時刻を固定して初期値を変える）</td></tr>
+    <tr><th>マウスホイール</th><td>図の上で拡大縮小（0.25〜2倍）</td></tr>
+    <tr><th>タイトル帯ドラッグ</th><td>図を移動（クリックで最前面）</td></tr>
+    <tr><th>右下の▨ドラッグ</th><td>図の大きさを変更</td></tr>
+    <tr><th>各図の範囲欄</th><td>図ごとの表示範囲を選ぶ（既定は「全体」＝上部の表示範囲に揃う）</td></tr>
+    <tr><th>各図の ⧉</th><td>同じ図を別の表示範囲で複製（広さ違いの比較）</td></tr>
+    <tr><th>モデル違い</th><td>選択中の図を、他のモデルでも同じ範囲で並べて整列（ECMWFとGFSの比較）。モデルで最新の初期値が違う場合は、<b>予報有効時刻が一致する別の初期値の画像</b>を出す（見出しに [初期値 +予報時間] が付く）。時刻が合わない時は「画像なし」</td></tr>
+    <tr><th>各図のモデル欄</th><td>図ごとにモデルを選ぶ（既定は「全体のモデル」）</td></tr>
+    <tr><th>広さ違い</th><td>選択中の図を、他の全範囲でも並べて表示</td></tr>
+    <tr><th>登録</th><td>今の配置に名前を付けて保存。「登録した配置」から呼び出し</td></tr>
+    <tr><th>B</th><td>選択中（最後に触った）の図を最背面へ</td></tr>
+    <tr><th>P / S</th><td>再生 / 停止</td></tr>
+    <tr><th>T / I</th><td>整列 / 配置の初期化</td></tr>
+    <tr><th>D / H</th><td>上部メニューの表示切替 / この説明</td></tr>
+  </table>
+  <p>範囲によって予報時間の刻みが違う（0.5°は6時間毎、0.125°は3時間毎）ため、刻みの粗い図は直前の予報時間の画像を表示し、タイトルに(FTxh)と出ます。配置は自動保存されます。</p>
+  <h2>更新（自動取得する初期値と、揃う時刻の目安）</h2>
+  <table>
+<tr><th>ECMWF</th><td><b>00 / 12 / 18</b></td><td>00Z 7:20〜10:20 ／ 12Z 19:40〜23:25 ／ 18Z 翌0:30〜3:35</td></tr>
+<tr><th>GFS</th><td>00 / 12</td><td>00Z 4:00〜6:15 ／ 12Z 16:15〜18:00</td></tr>
+<tr><th>AIFS</th><td>00 / 12</td><td>00Z 5:20〜6:50 ／ 12Z 17:30〜21:00</td></tr>
+  </table>
+  <p>ECMWF だけ <b>18Z も</b>載せます（06Z は取りません）。GFS・AIFS は 00/12Z のみ（公開容量の都合）。公開サイトは各モデル約2日分です。時刻はすべて UTC（JST は +9時間）。</p>
+  <p>自動更新は、揃ってから次の定期起動（1日22回）で作図が始まり、<b>揃ってから見えるまで通常30分〜1時間強</b>です。ローカルの GSM（00/12Z）と JRA-55（過去分を「過去分取得」で取得）は公開されません。</p>
+  <button id="btnHelpClose">閉じる</button>
+</div>
+<script src="board.js"></script>
+</body>
+</html>
