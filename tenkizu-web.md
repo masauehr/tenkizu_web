@@ -72,6 +72,7 @@ tenkizu（CLI で描いていた天気図・断面図・エマグラム）を、
 - 公開されるのは、**押した画像だけ**（自動では公開されない）。新しいものから**最大10件**で、11件目を載せると一番古いものが公開側から外れる。1件は約100〜150KB で、公開サイトの容量（1GB の目安）への影響は小さい。
 - 公開版の通常版では、「別の図を並べる」の右の地域に **「保存された断面図・エマグラム（公開分）」** が出て、公開された10件から選べる（予報時間とは連動しない。新しく作ることはできない）。公開分が無いときは、この項目は出ない。
 - 条件ファイル（`.json`）の無い古い画像（この仕組みの前に作ったもの）は、表示名が分からないため公開できない。作図し直す。
+- 公開した画像の名前は、手元の `output/custom/published.json` に記録される（自由選択の「最近の作図」に【公開中】と出すため）。
 - 公開は `publish.py --custom` が行い、公開ブランチ（gh-pages）の `output/custom/` だけを書き換える。モデルの画像や画面ファイルには触れない（CI の自動更新とも干渉しない）。
 
 ## 3. データと更新
@@ -91,7 +92,7 @@ tenkizu（CLI で描いていた天気図・断面図・エマグラム）を、
     python make_charts.py gfs --latest --max-ft 24   # 1モデルだけ、24時間まで
     python server.py                                 # ローカルで閲覧 http://127.0.0.1:8791/（自由選択もここ。nwp_chart_web は 8790 なので同時に動かせる）
     python sync_public.py                            # 公開分を手元へ取り込む
-    python -m pytest tests                           # テスト
+    python -m pytest tests                           # テスト（pytest は met_env_310 に pip で入れてある）
 
 公開側の図を作り直す: GitHub の Actions → update-model → Run workflow で `force` にチェック。
 
@@ -128,6 +129,7 @@ tenkizu（CLI で描いていた天気図・断面図・エマグラム）を、
 | `python3` で `ModuleNotFoundError` | `~/projects/.venv` が使われている。conda の `met_env_310` の python を絶対パスで指定する |
 | 定期実行が動かない | GitHub の schedule は遅れることがある。Actions の履歴を確認し、必要なら手動実行。恒久策は cron-job.org から `workflow_dispatch`（nwp_chart_web の CRON_JOB_ORG.md が参考） |
 | 自由選択が「ディスクの空きが少ないため…取得できません」 | 空きが5GB未満（`free_min_gb`）。不要なファイルを消すか、`disk_limits.json` で下げる。`python disk_guard.py` で使用量を確認 |
+| 新しい機能が効かない・画面が古い | 古いサーバーが残っていて、新しく起動したサーバーがポート使用中で起動に失敗していることがある。`lsof -nP -iTCP:8791 -sTCP:LISTEN` で待ち受けているプロセスの起動時刻を確認し、止めて起動し直す。また、URL の `#` 以降だけを変えて開いても画面は再読み込みされないので、Cmd+Shift+R で再読み込みする |
 | 自由選択が「GSM のデータが手元にありません」 | GSM は自動取得しない設計（ファイルが大きい）。launchd の GSM ジョブが取った初期値だけ選べる |
 
 ## 6. ファイル構成
@@ -145,10 +147,22 @@ tenkizu（CLI で描いていた天気図・断面図・エマグラム）を、
     ├── gsm_source.py        GSM（ローカル専用）
     ├── server.py            ローカルサーバー（/api/custom ほか）
     ├── make_coast.py        自由選択の地図用の海岸線 JSON を作る（web/coast.json）
-    ├── web/                 画面（Vanilla JS: index.html・board/・custom.html）
+    ├── web/                 画面（Vanilla JS）
+    │   ├── index.html・app.js・style.css      通常版（2モデル比較・別の図を並べる・使い方）
+    │   ├── board/（index.html・board.js・board.css）  画用紙版
+    │   └── custom.html・custom.js・coast.json  自由選択（断面図・エマグラム）とその地図用の海岸線
     ├── launchd/             ローカル定期更新の plist
+    │   ├── com.masahiro.tenkizu_web_sync.plist   公開分の取り込み（30分おき）
+    │   ├── com.masahiro.tenkizu_web_gsm.plist    GSM の取得（00/12Z・1時間おきに確認）
+    │   └── com.masahiro.tenkizu_web_disk.plist   ディスク使用量のチェック（6時間おき）
     ├── .github/workflows/   update-model.yml・deploy-web.yml
-    └── tests/               pytest
+    └── tests/               pytest（図種・断面の表示要素・エマグラムの地図・自由選択の履歴・公開掲載・ディスク制限）
+        ├── test_charts.py            図種の一覧・エマグラム・自由選択の入力検証など
+        ├── test_xsection_options.py  断面図の表示要素（全組み合わせの描画）
+        ├── test_emagram_map.py       エマグラムの地点の地図（●）
+        ├── test_custom_history.py    「最近の作図」（画像ファイルから作る一覧）
+        ├── test_publish_custom.py    公開サイトへの掲載（直近10件・外す・他に触れない）
+        └── test_disk_guard.py        ディスク使用量の制限・通知
 
 ## 7. 改修履歴
 

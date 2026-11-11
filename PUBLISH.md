@@ -19,7 +19,7 @@
 ローカルで作った断面図・エマグラムを、直近10件まで公開サイトに載せられる（自由選択のページの「公開サイトに載せる」。2回押して確定）。公開版では通常版の右の図に並べて見られる。
 ```bash
 python publish.py --custom <画像名.png ...> [--dry-run]   # 載せる（output/custom/ の画像。条件ファイル .json が要る）
-python publish.py --custom-remove <画像名.png ...>         # 外す
+python publish.py --custom-remove <画像名.png ...>         # 外す（画面の「公開から外す」と同じ）
 ```
 - 反映先は gh-pages の `output/custom/`（`list.json` と画像）だけ。モデルの画像・画面ファイルには触れない。`list.json` は新しい順・最大10件。
 - 公開した名前は手元の `output/custom/published.json` に記録される（自由選択のページの【公開中】の表示に使う）。

@@ -5,6 +5,7 @@ tenkizu の CLI 作図（天気図・断面図・エマグラム）を Web で�
 **nwp_chart_web に無い図だけ**を作る（重複する図は作らない）。nwp_chart_web とは**共通部品化しない**（コピーして調整。各リポジトリは単独で動く）。
 
 ## 実行環境
+- 画面を直して確認するとき: **古いサーバーが残っていると、新しいサーバーはポート使用中で起動に失敗し、新機能が効かないように見える**。`lsof -nP -iTCP:8791 -sTCP:LISTEN` で待ち受けているプロセスを確認してから起動する。URL の `#` 以降だけを変えても再読み込みされない。
 - Python: `/opt/anaconda3/envs/met_env_310/bin/python`（pygrib・cartopy 0.25・metpy・scipy・pytest）。`python3` は別の環境になるので使わない。
 - **CI は cartopy 0.26・pip の pygrib**。手元と挙動が違う（過去に北半球図の範囲・ECMWF の経度で崩れた）。図の見た目を変えたら `uv venv --python 3.11` ＋ `requirements.txt` の環境でも確認する。
 - テスト: `python -m pytest tests`。ブラウザの確認は Chrome（画面の修正は公開サイトにも自動反映されるので push 前に手元で確認）。
@@ -21,7 +22,8 @@ tenkizu の CLI 作図（天気図・断面図・エマグラム）を Web で�
 - 画用紙版の保存キーは `tenkizuBoard.v1`。**同じドメイン（masauehr.github.io）の nwp_chart_web と localStorage を共有する**ため、キー名を共通にしない。
 - ローカルのディスク: 自由選択で取得した GRIB2（`data/ecmwf`・`data/gfs`）と `output/custom` は `disk_guard.py` が上限を超えた分を古い順に削除する。**GSM のデータ（`data/gsm`）と作図済み画像は消さない**（警告のみ）。消す対象を増やすときは `groups()` の `prune` を確認する。
 - 自由選択の「最近の作図」は、`output/custom/` の画像と同名の `.json`（条件）から `/api/custom/list` が作る。ブラウザの localStorage に履歴を持たせない（別のブラウザで見えなくなる）。画像を消す処理は `.json` も一緒に消すこと。
-- **公開版では新しい断面図・エマグラムは作れない**（Pages は静的。作図は Python が要る）。代わりに、ローカルで作った図を `publish.py --custom` で gh-pages の `output/custom/`（直近10件）に載せ、公開版でも右の図に並べて見られる。公開は画面で2回押して確定した画像だけ（自動では載せない）。`sync_web`・`sync_model` は `output/custom/` に触れないこと。
+- 通常版の「別の図を並べる」（`web/app.js`。右に別の地域の図／自由選択の直近10件。公開サイトは `output/custom/list.json` の公開分。2モデル比較とは同時に使えない）。nwp_chart_web にも同じ機能があるが、**別々にコピーしてある**（直すときは両方を見る）。
+- **公開版では新しい断面図・エマグラムは作れない**（Pages は静的。作図は Python が要る）。代わりに、ローカルで作った図を `publish.py --custom` で gh-pages の `output/custom/`（直近10件）に載せ、公開版でも右の図に並べて見られる。公開は画面で2回押して確定した画像だけ（自動では載せない）。公開した名前は手元の `output/custom/published.json` に記録する。`sync_web`・`sync_model` は `output/custom/` に触れないこと。
 - ローカルサーバーの既定ポートは **8791**（nwp_chart_web は 8790。同時に動かせるよう分けてある）。
 - 公開サイトの容量は 1GB が目安（1初期値 約20MB）。公開個数・図種・地域を増やす前に見積もる。
 - 図の見た目を変えたら、公開側の既存画像は作り直さないと変わらない（Actions の update-model を `force=true` で手動実行）。
