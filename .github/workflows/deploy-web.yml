@@ -1,0 +1,31 @@
+name: deploy-web
+
+# 画面（web/）を直したときに、**画像を作らず**画面ファイルだけを公開ブランチ(gh-pages)へ反映する（数十秒）。
+# 画像・manifest は触らない。モデルの作図は update-model.yml が行う。
+on:
+  # push 時の自動反映は、公開を始めるときに有効にする（paths: web/** と publish.py の main への push）
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 画面ファイルだけを公開ブランチへ反映（pipなし・画像なし）
+        run: python publish.py --web-only
+      - name: GitHub Pages の再ビルドを要求（保険）
+        run: gh api -X POST repos/${{ github.repository }}/pages/builds || true
+        env:
+          GH_TOKEN: ${{ github.token }}

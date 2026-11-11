@@ -1,4 +1,4 @@
-# tenkizu_web 設計メモ（2026-11-11 開始・Phase1・Phase2（固定断面）まで実装）
+# tenkizu_web 設計メモ（2026-11-11 開始・Phase1〜3 実装済み・公開は未開始）
 
 tenkizu（CLIで天気図・断面図・エマグラムを描画）の成果を、Webアプリで見られるようにする新プロジェクト。
 仕組みは [nwp_chart_web](../nwp_chart_web/DESIGN.md) と同様（GitHub Actionsで作図 → 静的PNGをGitHub Pagesで配信）。
@@ -79,3 +79,12 @@ tenkizu_web/
 - 平滑化回数は tenkizu（0.5°向け）を格子間隔で換算（`_passes`）。
 - 地域は当面 `japan` のみ。
 - **未実装（次）**: 画面（`web/` は nwp_chart_web のまま。AIFS・JRA-55・過去分取得の記述が残る）の整理、`update_latest.py`、`publish.py`／CI（Phase4）、北半球極座標図・地上FAX。
+
+## 進捗（2026-11-11 続き）
+
+- **エマグラム（Phase3）**: `emagram.py`。最寄り格子点のプロファイルを log(気圧) で補間し、持ち上げ気塊・LCL・EL・CAPE/CIN・ホドグラフを描く。CAPE=0（安定）のときは塗らない。固定5地点（稚内・館野・潮岬・福岡・那覇＝`emagram.STATIONS`、地域名 `emagram`、図種 `em_<観測所番号>`）。取得している気圧面は 975〜200hPa の7層と少ないため補間で補っている（粗さは残る）。
+- **ローカルの自由選択**: `custom.py` と `server.py` の `GET /api/custom`（ローカルのみ・入力検証あり・同じ条件は作り直さない・直列実行）、画面 `web/custom.html`（断面の始点終点・エマグラムの緯度経度・プリセットボタン）。データが無い初期値・予報時間は ECMWF/GFS ならその場で取得（約1分、`data/` に残る）、GSM は手元分のみ。結果は `output/custom/`（公開しない）。
+- **画面の整理**: AIFS・JRA-55・過去分取得・公開分の同期ボタンと関連コードを `web/` から除去。更新APIがあるとき（ローカル）だけ「自由選択」リンクを出す。
+- **公開用の準備**: `update_latest.py`・`build_site.py`・`publish.py`・`.github/workflows/`（update-model・deploy-web）を移植。**自動実行は無効**（手動実行のみ）。手順は [PUBLISH.md](PUBLISH.md)。
+- テスト: `tests/test_charts.py`（6件、`python -m pytest tests`）。
+- **残り**: 公開の開始（ユーザー判断）、断面図の地図クリックでの2点指定、取得気圧面の追加（400/250/100hPa 等）の検討、ローカルの定期更新（launchd）。

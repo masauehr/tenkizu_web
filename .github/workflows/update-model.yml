@@ -1,0 +1,81 @@
+name: update-model
+
+# モデルごと（ECMWF / GFS）に**別々のジョブで並行**して、最新の初期値を取得・作図し、公開ブランチ(gh-pages)へ反映する。
+#  - あるモデルの取得が遅くても、他のモデルは待たず、できた順に公開される
+#  - 各ジョブの中でも、全ステップの取得完了を待たず、取得できたステップから順に作図する（make_charts.py）
+#  - 作成済みの初期値は公開ブランチから取り込んで再利用する（無駄な再作図をしない）。公開するのは約2日分（ECMWFは00/12/18UTCの5初期値、GFSは00/12UTCの4初期値。nwp_data.MODELS の publish_*）
+#  - 公開ブランチ(gh-pages)が GitHub Pages の配信元。画面(web/)だけの修正は deploy-web.yml が画像なしで反映する
+on:
+  # schedule は公開を始めるときに有効にする（nwp_chart_web と同じ時刻設定。cron-job.org から workflow_dispatch で起動する方式も使える）
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "作図するモデル（all で全モデル）"
+        type: choice
+        default: all
+        options: [all, ecmwf, gfs]
+
+permissions:
+  contents: write   # 公開ブランチ(gh-pages)へのpush
+  pages: write      # Pagesの再ビルド要求
+
+jobs:
+  # 対象モデルの一覧を決める（matrix は job の if では使えないため、先に一覧を作って matrix に渡す）
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      models: ${{ steps.pick.outputs.models }}
+    steps:
+      - id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_MODEL: ${{ inputs.model }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "$INPUT_MODEL" != "all" ] && [ -n "$INPUT_MODEL" ]; then
+            echo "models=[\"$INPUT_MODEL\"]" >> "$GITHUB_OUTPUT"
+          else
+            echo 'models=["ecmwf","gfs"]' >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: plan
+    strategy:
+      fail-fast: false            # 1モデルが失敗しても他は続ける
+      matrix:
+        model: ${{ fromJSON(needs.plan.outputs.models) }}   # モデルごとに別ジョブで並行
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    concurrency:
+      group: build-${{ matrix.model }}     # 同じモデルの二重実行を避ける（別モデルは並行）
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: 依存のインストール
+        run: pip install -r requirements.txt
+
+      - name: Natural Earth（海岸線）のキャッシュ
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/cartopy
+          key: cartopy-ne-v1
+
+      - name: 公開済みの画像を取り込む（作成済み判定・再利用）
+        run: python publish.py --pull --model ${{ matrix.model }}
+
+      - name: 最新初期値の取得と作図（${{ matrix.model }}）
+        run: python update_latest.py --models ${{ matrix.model }} --jobs 4 --dl-jobs 6
+
+      - name: 公開ブランチへ反映
+        run: python publish.py --model ${{ matrix.model }}
+
+      - name: GitHub Pages の再ビルドを要求（push で自動的に走らない場合の保険）
+        run: gh api -X POST repos/${{ github.repository }}/pages/builds || true
+        env:
+          GH_TOKEN: ${{ github.token }}

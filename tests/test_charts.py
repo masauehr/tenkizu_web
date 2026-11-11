@@ -52,3 +52,23 @@ def test_emagram_profile_and_refine():
     assert prof["grid_lat"] == 35.0 and prof["grid_lon"] == 135.0
     fine = emagram.refine(prof)
     assert fine["p"][0] == 850 and fine["p"][-1] >= 300 and len(fine["p"]) > 40
+
+
+def test_custom_validate():
+    import pytest
+    import custom
+    ok = custom.validate("xsection", "gfs", "2026111018", "12",
+                         dict(lat1="45", lon1="130", lat2="25", lon2="130"))
+    assert ok["ft"] == 12 and ok["lat2"] == 25.0
+    with pytest.raises(custom.CustomError):                       # 近すぎる
+        custom.validate("xsection", "gfs", "2026111018", "12", dict(lat1="40", lon1="125", lat2="40.2", lon2="125.2"))
+    with pytest.raises(custom.CustomError):                       # 長すぎる
+        custom.validate("xsection", "gfs", "2026111018", "12", dict(lat1="0", lon1="100", lat2="0", lon2="200"))
+    with pytest.raises(custom.CustomError):                       # 数値でない
+        custom.validate("emagram", "gfs", "2026111018", "12", dict(lat="abc", lon="139"))
+    with pytest.raises(custom.CustomError):                       # 存在しないモデル（AIFSは本プロジェクトに無い）
+        custom.validate("emagram", "aifs", "2026111018", "12", dict(lat="35", lon="139"))
+    with pytest.raises(custom.CustomError):                       # 初期値の形式
+        custom.validate("emagram", "gfs", "20261110", "12", dict(lat="35", lon="139"))
+    p = custom.validate("emagram", "gfs", "2026111018", "12", dict(lat="35", lon="139"))
+    assert custom.out_path(p) == custom.out_path(dict(p))        # 同じ条件は同じファイル名（作り直さない）
