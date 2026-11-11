@@ -8,7 +8,7 @@ import nwp_charts as nc
 
 def test_charts_are_new_only():
     # nwp_chart_web と重複する図種を持たない
-    assert set(nc.CHARTS) == {"instab", "fax57", "fax78", "qvec850", "polar300", "polar500", "surffax"}
+    assert set(nc.CHARTS) == {"instab", "fax57", "fax78", "qvec850", "polar300", "polar500", "surffax", "xs130", "xs140"}
 
 
 def test_passes_scale_with_grid():
@@ -21,3 +21,15 @@ def test_passes_scale_with_grid():
 
 def test_dewpoint_saturated():
     assert abs(nc.dewpoint(np.array(10.0), np.array(100.0)) - 10.0) < 0.05
+
+
+def test_xsection_path_and_components():
+    import xsection
+    plat, plon = xsection.path_points((45.0, 130.0), (25.0, 130.0))
+    assert len(plat) == 81 and plat[0] == 45.0 and plat[-1] == 25.0 and set(plon) == {130.0}
+    lats = np.arange(0, 60.5, 0.5)
+    lons = np.arange(100, 160.5, 0.5)
+    u = np.ones((len(lats), len(lons)))
+    v = np.zeros_like(u)
+    d = xsection.divergence(u, v, lats, lons)
+    assert abs(d[60, 60]) < 1e-12            # 一様な東風は発散ゼロ

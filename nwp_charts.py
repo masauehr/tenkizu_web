@@ -48,6 +48,9 @@ REGIONS = {
     # 北半球極座標（専用の描画。bbox 等は manifest 用のダミー）。図種側で regions=("polar",) を指定する
     "polar": dict(label="北半球（極座標）", kind="polar", center=(140.0, 90.0), bbox=(0, 360, 20, 90),
                   barb_n=0, coast="50m", zoom=1),
+    # 鉛直断面図（専用の描画・固定断面。xsection.SECTIONS）。図種側で regions=("xsec",) を指定する
+    "xsec": dict(label="鉛直断面", kind="special", center=(135.0, 35.0), bbox=(100, 180, 0, 70),
+                 barb_n=0, coast="50m", zoom=1),
     # GSM 日本域 0.125°（Rjp, 3時間毎）。データ範囲は 120-150E, 20-50N。**GSM（ローカル専用）だけ**が持つ地域
     "japan3": dict(label="日本域（0.125°・3時間毎）", kind="lcc", center=(135.0, 36.0), width_km=2700,
                    bbox=(120, 150, 20, 50), barb_n=20, coast="10m", zoom=1, src="rjp", models=("gsm",)),
@@ -563,6 +566,8 @@ CHARTS = {
     "qvec850": dict(label="850hPa Qベクトル発散", fn=chart_qvec850, levels=[850], regions=("japan",)),
     "polar300": dict(label="北半球 300hPa（高度・風速・ジェット）", polar=True, level=300, levels=[300], regions=("polar",)),
     "polar500": dict(label="北半球 500hPa（高度・気温・風速）", polar=True, level=500, temp=True, levels=[500], regions=("polar",)),
+    "xs130": dict(label="断面 130E（南北・45N→25N）", xsection="ns130", regions=("xsec",)),
+    "xs140": dict(label="断面 140E（南北・45N→25N）", xsection="ns140", regions=("xsec",)),
     "surffax": dict(label="地上FAX（気圧・2m気温・10m風）", fn=chart_surffax, regions=("japan",)),
 }
 
@@ -613,6 +618,10 @@ def _caption(fig, parts, y, fw=None, fh=None):
 
 def render_chart(chart, region, F, init, ft, outpath, model="", quantize=True):
     """1枚描画して outpath に保存する。init は UTC の datetime。"""
+    if CHARTS[chart].get("xsection"):
+        import xsection
+        name, st, en = xsection.SECTIONS[CHARTS[chart]["xsection"]]
+        return xsection.render_xsection(F, init, ft, st, en, outpath, model=model, name=name, quantize=quantize)
     if CHARTS[chart].get("polar"):
         return render_polar(chart, F, init, ft, outpath, model=model, quantize=quantize)
     proj, extent = make_projection(region)

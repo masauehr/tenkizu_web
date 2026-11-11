@@ -1,4 +1,4 @@
-# tenkizu_web 設計メモ（2026-11-11 開始・Phase1 作図まで実装）
+# tenkizu_web 設計メモ（2026-11-11 開始・Phase1・Phase2（固定断面）まで実装）
 
 tenkizu（CLIで天気図・断面図・エマグラムを描画）の成果を、Webアプリで見られるようにする新プロジェクト。
 仕組みは [nwp_chart_web](../nwp_chart_web/DESIGN.md) と同様（GitHub Actionsで作図 → 静的PNGをGitHub Pagesで配信）。
@@ -72,7 +72,10 @@ tenkizu_web/
 | FAX57相当 | `fax57` | 500hPa気温・700hPa湿数 | 約210KB |
 | FAX78相当 | `fax78` | 850hPa気温・風・W/C・700hPa発散 | 約155KB |
 
-- 容量見積もり: 4図種×日本域×13FT（6時間毎・72h）≈ 7.5MB/初期値。公開5初期値で約40MB と小さく、アジア域の追加も余裕。
+- **追加実装 2026-11-11**: 地上FAX（`surffax`）・北半球極座標図（`polar300`/`polar500`、専用の `render_polar`、気温W/C・風速シェード）・**鉛直断面図**（`xsection.py`、固定断面 `xs130`/`xs140`＝南北 45N→25N、地域名 `xsec`）。
+  データ読み込み範囲を北半球全体（経度0〜360・緯度−15〜90）へ広げた（極座標図のため。`nwp_data.CROP`）。
+- 断面図の作り方: MetPy の cross_section を使わず、格子データを経路上へ双一次補間（`compute_section`）。鉛直は log(気圧) 補間で等値線を滑らかに、発散は約1°平滑化、風は経路方向に平滑化。地面（地表気圧）より下は灰色。上端は取得している最上層 200hPa（tenkizu は 100hPa まで）。
+- 容量見積もり（旧・4図種のみ）: 4図種×日本域×13FT（6時間毎・72h）≈ 7.5MB/初期値。公開5初期値で約40MB と小さく、アジア域の追加も余裕。
 - 平滑化回数は tenkizu（0.5°向け）を格子間隔で換算（`_passes`）。
 - 地域は当面 `japan` のみ。
 - **未実装（次）**: 画面（`web/` は nwp_chart_web のまま。AIFS・JRA-55・過去分取得の記述が残る）の整理、`update_latest.py`、`publish.py`／CI（Phase4）、北半球極座標図・地上FAX。

@@ -98,7 +98,6 @@ def _render_ft(args):
         if F is None:
             continue  # この予報時間に、その地域のデータ系統が無い（例: GSMの全球は6時間毎）
         out = OUTPUT_DIR / model / init_s / region
-        out.mkdir(parents=True, exist_ok=True)
         for chart in charts:
             if region not in nwp_charts.CHARTS[chart].get("regions", (region,)):
                 continue  # 図種ごとに作る地域を限っている（容量のため。jet200・t300はアジア域のみ）
@@ -107,6 +106,7 @@ def _render_ft(args):
             if any(lv not in F["p"] for lv in nwp_charts.CHARTS[chart].get("levels", [])):
                 continue  # このモデルに無い気圧面（ECMWF/AIFS/GSM全球の975hPa）はスキップ
             try:
+                out.mkdir(parents=True, exist_ok=True)   # 画像を作る地域だけ作る（空の地域ディレクトリを残さない）
                 nwp_charts.render_chart(chart, region, F, init, ft, out / f"{chart}_{ft:03d}.png",
                                         model=nwp_data.MODELS[model]["label"])
                 n += 1
