@@ -9,12 +9,10 @@
 
   ECMWF: https://data.ecmwf.int/forecasts/{YYYYMMDD}/{HH}z/ifs/0p25/oper/{YYYYMMDDHH}0000-{step}h-oper-fc.{grib2,index}
          利用条件: CC-BY-4.0（出典明記）。00/12UTCは360hまで、06/18UTCは90hまで。
-  AIFS : 同じ構造で ifs → aifs-single（ECMWFのAI予報モデル。00/06/12/18UTC、6時間刻みで360hまで）。
-         相対湿度 r が無く比湿 q があるため、読み込み時に q から相対湿度を計算する。ライセンスはIFSと同じCC-BY-4.0。
   GFS  : https://noaa-gfs-bdp-pds.s3.amazonaws.com/gfs.{YYYYMMDD}/{HH}/atmos/gfs.t{HH}z.pgrb2.0p25.f{FFF}{,.idx}
          NOAAの成果物（米国政府、出典明記を推奨）。
 
-load_fields() は gsm_chart_web と同じ形式の辞書を返す（描画側が同じコードで動く）。
+load_fields() は描画側が使う形式（msl・sp・u10・v10・t2・p[気圧面]{gh,t,u,v,r,w} など）の辞書を返す。
 """
 import json
 import os
@@ -49,7 +47,7 @@ def public_models():
 
 
 def auto_models():
-    """自動更新(update_latest)の対象モデル（auto=False のもの＝JRA-55 などは除く）。"""
+    """自動更新(update_latest)の対象モデル（auto=False のものは除く）。"""
     return [m for m, v in MODELS.items() if v.get("auto", True)]
 
 
@@ -59,7 +57,7 @@ def default_interval(model: str) -> int:
 
 # ECMWFのオープンデータ配信（索引は .index、積算降水 tp は前ステップとの差分、雲量は0-1）の形式を持つモデル → 配信元のパスのモデル名
 ECMWF_LIKE = {"ecmwf": "ifs"}
-# 積算降水 tp を mm にする係数。IFSは単位が m、AIFSは kg/m²(=mm)（実データの units 属性で確認。2026-11-04）
+# 積算降水 tp を mm にする係数。IFSは単位が m（実データの units 属性で確認）
 TP_TO_MM = {"ecmwf": 1000.0}
 
 CC_BY_URL = "https://creativecommons.org/licenses/by/4.0/"
@@ -77,7 +75,7 @@ def legal_text(model: str, year: int, accessed: str) -> dict:
     規約は変わり得るため、公開を続ける間は定期的に配信元で再確認すること。
     """
     if model in ECMWF_LIKE:
-        what = "IFS open data" if model == "ecmwf" else "AIFS open data (ECMWF's machine-learning forecast model)"
+        what = "IFS open data"
         short = (f"© {year} ECMWF (www.ecmwf.int). This service is based on data and products of the European Centre "
                  f"for Medium-Range Weather Forecasts (ECMWF), {what}, licensed under CC BY 4.0. "
                  "Modified: the data were processed into charts. "
@@ -155,8 +153,6 @@ def max_step(model: str, init: datetime) -> int:
     """その初期値で提供される最大予報時間。"""
     if model == "ecmwf":
         return 360 if init.hour in (0, 12) else 90
-    if model == "aifs":
-        return 360                       # 00/06/12/18UTC とも6時間刻みで360hまで
     return 384
 
 
@@ -208,9 +204,9 @@ def _ecmwf_rows(model, init, ft):
 
 
 def _ecmwf_select(rows, model="ecmwf"):
-    """必要なメッセージの (offset, length) を返す。AIFSは相対湿度 r が無いので比湿 q も取る。"""
+    """必要なメッセージの (offset, length) を返す。"""
     pl = {str(l) for l in PLEVELS}
-    pvars = ("gh", "t", "u", "v", "r", "w") + (("q",) if model == "aifs" else ())
+    pvars = ("gh", "t", "u", "v", "r", "w")
     out = []
     for r in rows:
         p, lt = r["param"], r.get("levtype")
@@ -312,7 +308,7 @@ def fetch_subset(model: str, init: datetime, ft: int, data_dir: Path = DEFAULT_D
 
 
 def fetch_tp_only(init: datetime, ft: int, data_dir: Path = DEFAULT_DATA_DIR, model: str = "ecmwf") -> Path | None:
-    """ECMWF系（IFS/AIFS）の積算降水(tp)だけを取る（直前ステップとの差分で時間降水を作るため。数百KB）。"""
+    """ECMWF（IFS）の積算降水(tp)だけを取る（直前ステップとの差分で時間降水を作るため。数百KB）。"""
     dest = Path(data_dir) / model / f"{init:%Y%m%d%H}" / f"tp_f{ft:03d}.grib2"
     if dest.exists() and dest.stat().st_size > 0:
         return dest
@@ -381,7 +377,7 @@ def _read(path: Path):
 
 def load_fields(model: str, path: Path, tp_prev_path: Path | None = None, interval: int = 6,
                 tp_prev_zero: bool = False) -> dict:
-    """取得済みの小さなGRIB2を gsm_chart_web と同形式の辞書にする。
+    """取得済みの小さなGRIB2を、描画用の辞書にする。
 
     tp_prev_path: ECMWFの1つ前の予報時間の積算降水(tp)。tp_prev_zero: 最初の区間なら True（積算0を前とみなす）。
     返り値: {"lats","lons","msl"(hPa),"sp"(hPa),"u10","v10","t2"(℃),"tcc"(%),"rr"(mm/h|None),"rr_h"(降水の平均時間),
@@ -396,7 +392,7 @@ def load_fields(model: str, path: Path, tp_prev_path: Path | None = None, interv
     F["t2"] = d["t2"] - 273.15
     tcc = d.get("tcc")
     if tcc is not None:
-        F["tcc"] = tcc * 100.0 if model in ECMWF_LIKE else tcc  # ECMWF/AIFSは0-1、GFSは%
+        F["tcc"] = tcc * 100.0 if model in ECMWF_LIKE else tcc  # ECMWFは0-1、GFSは%
     else:
         F["tcc"] = np.zeros_like(F["msl"])
     tp = d.get("tp")
@@ -417,8 +413,6 @@ def load_fields(model: str, path: Path, tp_prev_path: Path | None = None, interv
         z = {"gh": dd["gh"], "t": dd["t"] - 273.15, "u": dd["u"], "v": dd["v"]}
         if "r" in dd:
             z["r"] = dd["r"]
-        elif "q" in dd:                                       # AIFS: 比湿から相対湿度を計算
-            z["r"] = _rh_from_q(dd["q"], dd["t"] - 273.15, float(lv))
         else:
             z["r"] = np.full_like(dd["t"], 50.0)
         z["w"] = dd["w"] * 36.0 if "w" in dd else np.zeros_like(dd["t"])   # Pa/s → hPa/h
@@ -433,15 +427,6 @@ def load_fields(model: str, path: Path, tp_prev_path: Path | None = None, interv
                 z[k] = z[k][::-1, :]
     return F
 
-
-def _rh_from_q(q, t_c, p_hpa: float):
-    """比湿 q[kg/kg]・気温[℃]・気圧[hPa] → 相対湿度[%]。AIFS（相対湿度が無い）用。
-    e = q·p / (0.622 + 0.378·q)、飽和水蒸気圧は Bolton(1980) の式 es = 6.112·exp(17.67·T/(T+243.5))。"""
-    import numpy as np
-    q = np.clip(q, 0.0, None)
-    e = q * p_hpa / (0.622 + 0.378 * q)
-    es = 6.112 * np.exp(17.67 * t_c / (t_c + 243.5))
-    return np.clip(100.0 * e / es, 0.0, 100.0).astype(np.float32)
 
 
 def _gfs_window(path: Path) -> int:

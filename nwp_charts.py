@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
-"""ECMWF / GFS（0.25°）のGRIB2から気象庁ビューア風の天気図PNGを描画する。
+"""ECMWF / GFS（0.25°）・GSM から、tenkizu 由来の天気図・断面図・エマグラムのPNGを描画する。
 
-gsm_chart_web の gsm_charts.py をコピーして多モデル用に調整したもの（共通部品化しない方針）。
-図種: surf / tenki / z500 / jet300 / t500 / t850 / t700 / t925 / t975 / ept850（975hPaはGFSのみ）
-地域: japan（日本周辺・ランベルト） / okinawa（沖縄周辺・正距円筒） / asia（東アジア広域）
-  GSMだけ japan3 / okinawa3（日本域0.125°・3時間毎。src="rjp"）
+nwp_chart_web の nwp_charts.py をコピーして調整したもの（共通部品化しない方針）。nwp_chart_web に無い図だけを持つ。
+図種（CHARTS）: 北半球 polar300/polar500・平面図 fax57/fax78/qvec850/surffax/instab・断面 xs130/xs140・エマグラム em_<観測所番号>
+地域（REGIONS）: japan（平面図・ランベルト）・polar（北半球・極座標）・xsec（鉛直断面）・emagram（エマグラム）。okinawa・asia は図が無い（予備）
 """
 import os
 import sys
@@ -42,7 +41,7 @@ REGIONS = {
     "japan": dict(label="平面図", kind="lcc", center=(133.0, 36.0), width_km=4400,
                   bbox=(95, 180, 5, 68), barb_n=20, coast="10m", zoom=2),
     "okinawa": dict(label="沖縄周辺", kind="pc", center=(128.0, 27.0), width_deg=24.0,
-                    bbox=(105, 152, 8, 46), barb_n=16, coast="10m", zoom=3, exclude=("jra55",)),   # JRA-55は1.25°と粗いので作らない
+                    bbox=(105, 152, 8, 46), barb_n=16, coast="10m", zoom=3),
     "asia": dict(label="東アジア広域", kind="lcc", center=(115.0, 33.0), width_km=8600,
                  bbox=(55, 180, -8, 80), barb_n=24, coast="50m", zoom=1),
     # 北半球極座標（専用の描画。bbox 等は manifest 用のダミー）。図種側で regions=("polar",) を指定する
@@ -54,11 +53,6 @@ REGIONS = {
     # エマグラム（専用の描画・固定地点。emagram.STATIONS）。図種側で regions=("emagram",) を指定する
     "emagram": dict(label="エマグラム", kind="special", center=(135.0, 35.0), bbox=(100, 180, 0, 70),
                     barb_n=0, coast="50m", zoom=1),
-    # GSM 日本域 0.125°（Rjp, 3時間毎）。データ範囲は 120-150E, 20-50N。**GSM（ローカル専用）だけ**が持つ地域
-    "japan3": dict(label="日本域（0.125°・3時間毎）", kind="lcc", center=(135.0, 36.0), width_km=2700,
-                   bbox=(120, 150, 20, 50), barb_n=20, coast="10m", zoom=1, src="rjp", models=("gsm",)),
-    "okinawa3": dict(label="南西域（0.125°・3時間毎）", kind="pc", center=(133.0, 30.0), width_deg=26.0,
-                     bbox=(120, 150, 20, 50), barb_n=16, coast="10m", zoom=1, src="rjp", models=("gsm",)),
 }
 
 
@@ -665,7 +659,7 @@ def render_chart(chart, region, F, init, ft, outpath, model="", quantize=True):
             family="serif", color="red", va="top", ha="right", zorder=30)
     ax.text(0.985, 0.915, "JST", transform=ax.transAxes, fontsize=9, family="serif",
             color="red", va="top", ha="right", zorder=30)
-    stamp = f"ANAL:{valid:%Y/%m/%d %H:%M}" if F.get("no_cloud") else f"INIT:{init:%m/%d %H:%M}"   # 解析値(JRA-55)は解析時刻を年つきで出す（昔の日付のため）
+    stamp = f"INIT:{init:%m/%d %H:%M}"
     ax.text(0.006, 0.012, f"{model} {stamp}(UTC)".strip(), transform=ax.transAxes, fontsize=10,
             color="k", va="bottom", zorder=30)
 

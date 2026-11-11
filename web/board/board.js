@@ -1,7 +1,6 @@
 // ECMWF/GFS天気図ボード（画用紙版）
 // 複数の図を並べ、マウスで移動・拡大縮小し、キーで時間を前後させる。
-// 各図（パネル）は「図種 + 表示範囲」を持つ。表示範囲が null なら全体の表示範囲に揃う（既定）。
-// 同じ図種を別の表示範囲で複数並べる（広さ違い）ことも、配置を名前を付けて登録することもできる。
+// 各図（パネル）は図種を持ち、図が存在する範囲（北半球・平面図・断面・エマグラム）で表示する。配置は名前を付けて登録できる。
 // 画像規則: output/{model}/{init}/{region}/{chart}_{ft:03d}.png、一覧は output/manifest.json（相対パス。静的サイトでも動く）
 // 各図（パネル）は「モデル + 図種 + 表示範囲」を持ち、モデル・範囲が null なら全体の指定に揃う。ECMWFとGFSの同時比較もできる。
 // モデルによって最新の初期値が違っても比較できる: 全体の初期値が無いモデルの図は、予報有効時刻が一致する別の初期値の画像を出す。
@@ -9,7 +8,7 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   const IMG_W = 950, IMG_H = 760, TITLE_H = 22;           // 元画像のサイズと見出し帯の高さ
-  const MIN_W = IMG_W * 0.25, MAX_W = IMG_W * 2;          // 0.25〜2倍（元アプリと同じ）
+  const MIN_W = IMG_W * 0.25, MAX_W = IMG_W * 2;          // 0.25〜2倍
   const OUT = "../output/";                                  // 画像・manifest（このページは board/ 配下）
   const API = "../api/";                                     // 更新API（ローカルサーバーのみ）
   const LS_KEY = "tenkizuBoard.v1";   // 同じドメイン(masauehr.github.io)の nwp_chart_web の画用紙版と保存先を分ける（共有すると旧図種の配置が読み込まれて何も出ない）                            // 配置の自動保存
@@ -27,11 +26,11 @@
                   surffax: "地上FAX", xs130: "断面130E", xs140: "断面140E", em_47401: "エマ稚内", em_47646: "エマ館野",
                   em_47778: "エマ潮岬", em_47807: "エマ福岡", em_47936: "エマ那覇" };
   const RSHORT = { japan: "平面図", okinawa: "沖縄周辺", asia: "東アジア", polar: "北半球", xsec: "断面", emagram: "エマグラム",
-                   japan3: "日本域0.125°", okinawa3: "南西域0.125°" };
-  const RORDER = ["japan", "okinawa", "asia", "polar", "xsec", "emagram", "japan3", "okinawa3"];
+                 };
+  const RORDER = ["japan", "okinawa", "asia", "polar", "xsec", "emagram"];
 
   // items: パネルの一覧。{id, chart, region(null=全体に揃う), model(null=全体に揃う), primary, on, x, y, w, z}
-  //   primary=true: 上部メニューのON/OFFで操作する基本パネル。false: 広さ違いで増やした複製（✕で削除）
+  //   primary=true: 上部メニューのON/OFFで操作する基本パネル。false: モデル違いで増やした複製（✕で削除）
   const S = { m: null, model: null, init: null, region: null, ft: 0, items: [], zTop: 1, seq: 0, active: null, timer: null };
   const els = {}; // id → {root, img, nodata, name, sel, wantUrl}
 
@@ -64,7 +63,7 @@
     const m = effModel(it);
     return has(m, S.region, it.chart) ? S.region : (regionsOf().find((r) => has(m, r, it.chart)) || S.region);
   };
-  // 予報時間 ft がその図に無いとき（刻みの粗い範囲）は、直前の予報時間、無ければ最小のものを使う
+  // 予報時間 ft がその図に無いときは、直前の予報時間、無ければ最小のものを使う
   const pickFt = (list, ft) => {
     if (list.includes(ft)) return ft;
     const before = list.filter((f) => f <= ft);
@@ -543,7 +542,7 @@
     else if (k === "b" || k === "B") { const it = getItem(S.active); if (it) { it.z = 0; applyGeom(it); } }
     else return;
     e.preventDefault();
-    if (k.startsWith("Arrow")) stop(); // 矢印キーで再生停止（元アプリと同様）
+    if (k.startsWith("Arrow")) stop(); // 矢印キーで再生を止める
   });
 
   $("btnTile").onclick = () => tile(true);   // 整列＝今の並びのまま重ならないように敷き詰める（初期化とは別）

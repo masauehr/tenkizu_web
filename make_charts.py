@@ -68,7 +68,7 @@ def _render_ft(args):
     model, init_s, ft, charts, regions, data_dir, interval, keep = args
     init = nwp_data.parse_init(init_s)
     d = Path(data_dir)
-    cache = {}  # データ系統（GSMの main/rjp）ごとに1回だけ読む
+    cache = {}  # データ系統（src）ごとに1回だけ読む
 
     if model == "gsm":
         def fields(region):
@@ -100,11 +100,11 @@ def _render_ft(args):
         out = OUTPUT_DIR / model / init_s / region
         for chart in charts:
             if region not in nwp_charts.CHARTS[chart].get("regions", (region,)):
-                continue  # 図種ごとに作る地域を限っている（容量のため。jet200・t300はアジア域のみ）
+                continue  # 図種ごとに作る地域を限っている（北半球図は polar、断面は xsec、エマグラムは emagram など）
             if nwp_charts.CHARTS[chart].get("cloud") and F.get("no_cloud"):
-                continue  # 雲量が無いデータ（JRA-55）では天気図は作らない
+                continue  # 雲量が要る図は、雲量が無いデータでは作らない
             if any(lv not in F["p"] for lv in nwp_charts.CHARTS[chart].get("levels", [])):
-                continue  # このモデルに無い気圧面（ECMWF/AIFS/GSM全球の975hPa）はスキップ
+                continue  # このモデルに無い気圧面（ECMWFの975hPaなど）はスキップ
             try:
                 out.mkdir(parents=True, exist_ok=True)   # 画像を作る地域だけ作る（空の地域ディレクトリを残さない）
                 nwp_charts.render_chart(chart, region, F, init, ft, out / f"{chart}_{ft:03d}.png",

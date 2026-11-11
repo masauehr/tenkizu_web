@@ -13,7 +13,7 @@
   <label><span id="modelLabel">モデル</span>
     <select id="modelSel"></select>
   </label>
-  <!-- 2モデル比較: 同じ図種・範囲・予報有効時刻を、2つのモデルで左右に並べて表示する -->
+  <!-- 2モデル比較: 同じ図を、2つのモデルで左右に並べて表示する -->
   <label class="cmpToggle" title="同じ要素を2つのモデルで左右に並べて表示します（初期値が違えば予報有効時刻を合わせます）">
     <input type="checkbox" id="cmpChk"> 2モデル比較
   </label>
@@ -25,7 +25,7 @@
     <select id="initSel"></select>
   </label>
   <div id="regionBtns" class="seg" role="group" aria-label="地域"></div>
-  <button id="btnUpdate" title="RISHから最新データを取得して作図します">最新を取得</button>
+  <button id="btnUpdate" title="最新データを取得して作図します（ローカルサーバーのみ。ECMWF・GFS・GSM）">最新を取得</button>
   <span id="updateMsg"></span>
   <a href="board/" title="複数の図を並べて表示">画用紙版</a>
   <button id="btnHelp" title="使い方・図の読み方 (H)">使い方</button>

@@ -2,7 +2,7 @@
 // 画像規則: output/{model}/{init}/{region}/{chart}_{ft:03d}.png、一覧は output/manifest.json
 // パスは相対指定（GitHub Pages のようにサブパス配下へ置いても動く）。更新API(api/)があるのはローカルサーバーだけ。
 //
-// 2モデル比較モード: 同じ図種・範囲・予報有効時刻を、2つのモデルで左右に並べる。
+// 2モデル比較モード: 同じ図を、2つのモデルで左右に並べる。
 //   左のモデルが基準（初期値 S.init と予報時間 S.ft を持つ）。右のモデルに同じ初期値が無ければ、
 //   予報有効時刻が一致する別の初期値の画像を探して出す（画用紙版と同じ考え方）。
 (function () {
@@ -41,7 +41,6 @@
     return `${t.getUTCMonth() + 1}/${t.getUTCDate()} ${pad(t.getUTCHours())}:${pad(t.getUTCMinutes())}UTC`;
   };
   const labelOf = (m) => (S.manifest.models[m] || {}).label || m;
-  const isAnal = (m) => !!(S.manifest.models[m] || {}).analysis;   // 再解析（JRA-55）: 初期値＝開始時刻、FT＝開始からの経過時間
   // 比較に使うモデル（比較オフなら左だけ）
   const shownModels = () => (S.cmp && S.model2 ? [S.model, S.model2] : [S.model]);
 
@@ -70,7 +69,7 @@
   const byChart = (list) => list.sort((a, b) => chartRank(a) - chartRank(b));
   const chartsAvail = (region) => byChart([...new Set(shownModels().flatMap((m) => Object.keys(regionMap(m)[region] || {})))]);
 
-  // 予報時間 ft がその図に無いとき（刻みの粗い範囲）は、直前の予報時間、無ければ最小のものを使う
+  // 予報時間 ft がその図に無いときは、直前の予報時間、無ければ最小のものを使う
   const pickFt = (list, ft) => {
     if (list.includes(ft)) return ft;
     const before = list.filter((f) => f <= ft);
@@ -216,17 +215,11 @@
   function buildInitSel() {
     const sel = $("initSel");
     sel.innerHTML = "";
-    const anal = isAnal(S.model);
-    $("initLabel").textContent = anal ? "開始" : "初期値";             // 再解析（JRA-55）は「開始時刻から○コマ」の系列
     for (const i of inits()) {
       const o = document.createElement("option");
       const d = parseInit(i.init);
       o.value = i.init;
       o.textContent = fmt(d, 0, "UTC");
-      if (anal) {                                                      // 系列のコマ数（異なる予報時間の数）。時刻はスライダー・再生で動かす
-        const n = Math.max(0, ...Object.values(i.regions || {}).flatMap((r) => Object.values(r).map((l) => l.length)));
-        if (n > 1) o.textContent += ` から${n}コマ（＋${(n - 1) * 6}h）`;
-      }
       sel.appendChild(o);
     }
     sel.value = S.init;
@@ -291,7 +284,7 @@
     if (!r) return `<b>${esc(labelOf(model))}</b> ｜ 画像なし`;
     const d = parseInit(r.init);
     const note = r.init !== S.init ? "（別の初期値・予報時刻を合わせて表示）" : (r.exact ? "" : `（FT${r.ft}h＝直前の予報時間）`);
-    return `<b>${esc(labelOf(model))}</b> ｜ ${isAnal(model) ? "解析 開始" : "初期値"} ${fmt(d, 0, "UTC")} ＋${r.ft}h${note}`;
+    return `<b>${esc(labelOf(model))}</b> ｜ 初期値 ${fmt(d, 0, "UTC")} ＋${r.ft}h${note}`;
   }
 
   function update() {
@@ -322,9 +315,7 @@
     const d = parseInit(S.init);
     $("timeInfo").innerHTML = S.cmp
       ? `予報有効時刻 <b>${fmt(d, S.ft, "UTC")}</b> ／ 左のモデルの初期値 ${fmt(d, 0, "UTC")} ＋${S.ft}h`
-      : isAnal(S.model)
-        ? `解析 開始 ${fmt(d, 0, "UTC")} ／ <b>＋${S.ft}h</b> ／ 解析時刻 <b>${fmt(d, S.ft, "UTC")}</b>`
-        : `初期値 ${fmt(d, 0, "UTC")} ／ <b>FT=${S.ft}h</b> ／ 予報時刻 <b>${fmt(d, S.ft, "UTC")}</b>`;
+      : `初期値 ${fmt(d, 0, "UTC")} ／ <b>FT=${S.ft}h</b> ／ 予報時刻 <b>${fmt(d, S.ft, "UTC")}</b>`;
     applySize();                                  // timeInfo の行数で画像の開始位置が変わるため、収まる高さを再計算
 
     buildThumbs();

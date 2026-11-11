@@ -13,7 +13,7 @@
     <span id="dateLabel">読み込み中…</span>
     <label>モデル(全体) <select id="modelSel"></select></label>
     <label>初期値 <select id="initSel"></select></label>
-    <button id="btnUpdate" title="RISHから最新データを取得して作図します">最新を取得</button>
+    <button id="btnUpdate" title="最新データを取得して作図します（ローカルサーバーのみ。ECMWF・GFS・GSM）">最新を取得</button>
     <span id="updateMsg"></span>
     <a href="../" title="通常版ビューア">通常版</a>
     <a href="https://masauehr.github.io/nwp_chart_web/" target="_blank" rel="noopener" title="ECMWF・GFS・AIFS・GSM の数値モデル天気図ビューア（別サイト）">数値モデル天気図</a>
@@ -25,7 +25,7 @@
     <span id="chartToggles" role="group" aria-label="表示する図"></span>
     <span class="sep"></span>
     <button id="btnTile" title="表示中の図を、今の並びのまま重ならないように敷き詰める (T)">整列</button>
-    <button id="btnModels" title="選択中の図を、他のモデルでも同じ範囲で並べる（ECMWFとGFSの比較）">モデル違い</button>
+    <button id="btnModels" title="選択中の図を、他のモデルでも並べる（ECMWFとGFSの比較）">モデル違い</button>
     <button id="btnPlay" title="再生/停止 (P / S)">▶</button>
     <button id="btnReset" title="表示する図と配置を初期状態に戻す (I)">初期化</button>
     <span class="sep"></span>
@@ -44,26 +44,25 @@
 <div id="help" hidden>
   <h2>操作方法</h2>
   <table>
-    <tr><th>↑ / ↓</th><td>予報時間 +1ステップ / −1ステップ（3または6時間）（Ctrl+↓: 最初、Ctrl+↑: 最後）</td></tr>
+    <tr><th>↑ / ↓</th><td>予報時間 +1ステップ / −1ステップ（6時間）（Ctrl+↓: 最初、Ctrl+↑: 最後）</td></tr>
     <tr><th>← / →</th><td>初期時刻を 前 / 次（Ctrl+←→: 予報有効時刻を固定して初期値を変える）</td></tr>
     <tr><th>マウスホイール</th><td>図の上で拡大縮小（0.25〜2倍）</td></tr>
     <tr><th>タイトル帯ドラッグ</th><td>図を移動（クリックで最前面）</td></tr>
     <tr><th>右下の▨ドラッグ</th><td>図の大きさを変更</td></tr>
-    <tr><th>モデル違い</th><td>選択中の図を、他のモデルでも同じ範囲で並べて整列（ECMWFとGFSの比較）。モデルで最新の初期値が違う場合は、<b>予報有効時刻が一致する別の初期値の画像</b>を出す（見出しに [初期値 +予報時間] が付く）。時刻が合わない時は「画像なし」</td></tr>
+    <tr><th>モデル違い</th><td>選択中の図を、他のモデルでも並べて整列（ECMWFとGFSの比較）。モデルで最新の初期値が違う場合は、<b>予報有効時刻が一致する別の初期値の画像</b>を出す（見出しに [初期値 +予報時間] が付く）。時刻が合わない時は「画像なし」</td></tr>
     <tr><th>登録</th><td>今の配置に名前を付けて保存。「登録した配置」から呼び出し</td></tr>
     <tr><th>B</th><td>選択中（最後に触った）の図を最背面へ</td></tr>
     <tr><th>P / S</th><td>再生 / 停止</td></tr>
     <tr><th>T / I</th><td>整列 / 配置の初期化</td></tr>
     <tr><th>D / H</th><td>上部メニューの表示切替 / この説明</td></tr>
   </table>
-  <p>範囲によって予報時間の刻みが違う（0.5°は6時間毎、0.125°は3時間毎）ため、刻みの粗い図は直前の予報時間の画像を表示し、タイトルに(FTxh)と出ます。配置は自動保存されます。</p>
-  <h2>更新（自動取得する初期値と、揃う時刻の目安）</h2>
+  <p>予報時間は6時間毎で72時間先までです。モデルによって初期値が違う場合や、その予報時間の画像が無い図は、直前の予報時間の画像を表示し、タイトルに(FTxh)と出ます。配置は自動保存されます（「初期化」で初期状態に戻せます）。</p>
+  <h2>更新（12Z初期値の時間帯に自動更新）</h2>
   <table>
-<tr><th>ECMWF</th><td><b>00 / 12 / 18</b></td><td>00Z 7:20〜10:20 ／ 12Z 19:40〜23:25 ／ 18Z 翌0:30〜3:35</td></tr>
-<tr><th>GFS</th><td>00 / 12</td><td>00Z 4:00〜6:15 ／ 12Z 16:15〜18:00</td></tr>
+    <tr><th>GFS</th><td>12Z 初期値は 16:15〜18:00 UTC ごろに揃う</td></tr>
+    <tr><th>ECMWF</th><td>12Z 初期値は 19:40〜23:25 UTC ごろに揃う</td></tr>
   </table>
-  <p>ECMWF だけ <b>18Z も</b>載せます（06Z は取りません）。GFS は 00/12Z のみ（公開容量の都合）。公開サイトは各モデル約2日分です。時刻はすべて UTC（JST は +9時間）。</p>
-  <p>自動更新は、揃ってから次の定期起動で作図が始まり、ローカルの GSM は公開されません。</p>
+  <p>公開サイトは UTC 17〜23時の :30（1日7回）に自動で更新され、各モデル約2日分を載せます。00Z・18Z は定期更新に入れていないので、載るのは手動で更新したときだけです。時刻はすべて UTC（JST は +9時間）。ローカルの GSM は公開されません。</p>
   <button id="btnHelpClose">閉じる</button>
 </div>
 <script src="board.js"></script>
