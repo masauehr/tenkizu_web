@@ -45,6 +45,9 @@ REGIONS = {
                     bbox=(105, 152, 8, 46), barb_n=16, coast="10m", zoom=3, exclude=("jra55",)),   # JRA-55は1.25°と粗いので作らない
     "asia": dict(label="東アジア広域", kind="lcc", center=(115.0, 33.0), width_km=8600,
                  bbox=(55, 180, -8, 80), barb_n=24, coast="50m", zoom=1),
+    # 北半球極座標（専用の描画。bbox 等は manifest 用のダミー）。図種側で regions=("polar",) を指定する
+    "polar": dict(label="北半球（極座標）", kind="polar", center=(140.0, 90.0), bbox=(0, 360, 20, 90),
+                  barb_n=0, coast="50m", zoom=1),
     # GSM 日本域 0.125°（Rjp, 3時間毎）。データ範囲は 120-150E, 20-50N。**GSM（ローカル専用）だけ**が持つ地域
     "japan3": dict(label="日本域（0.125°・3時間毎）", kind="lcc", center=(135.0, 36.0), width_km=2700,
                    bbox=(120, 150, 20, 50), barb_n=20, coast="10m", zoom=1, src="rjp", models=("gsm",)),
@@ -434,12 +437,133 @@ def chart_fax78(ax, V, F, ctx):
     legend_box(ax, [(c, None, None) for c in cols], [str(x) for x in lev])
 
 
+def chart_surffax(ax, V, F, ctx):
+    """地上FAX: 海面気圧（4hPa毎・20hPa太線）＋ 2m気温（緑）＋ 10m風 ＋ H/Lスタンプ"""
+    V.set_level(F, None)
+    lines(ax, V, F["t2"], list(range(-60, 61, 3)), color="#3aa03a", lw=0.9,
+          label_levels=list(range(-30, 46, 6)), fmt="%d", fs=7)
+    lines(ax, V, F["msl"], np.arange(900, 1060, 4), major=list(range(900, 1060, 20)),
+          fmt="%d", fs=9)
+    extrema(ax, V, F["msl"], "H", 13, color="#1030c0")
+    extrema(ax, V, F["msl"], "L", 13, color="#c01010")
+    barbs(ax, V, F["u10"], F["v10"], "k")
+    ctx["title"] = "PseaSURF,T2m,WindSURF"
+
+
+# ---------------------------------------------------------------- 北半球極座標図（専用の描画）
+POLAR_HGT = {300: (8700, 10200, 60, 300), 500: (4800, 6000, 60, 300)}      # 最小・最大・間隔・太線間隔 [m]
+POLAR_WIND = {300: (20, 100, 10), 500: (10, 60, 10)}                      # 風速シェード 最小・最大・間隔 [m/s]
+POLAR_TEMP = {300: (-70, -15), 500: (-55, 10)}                            # 気温線 最小・最大 [℃]
+POLAR_COLORS = ["#ffffff", "#b3f2ff", "#33ccff", "#008cff", "#33bf4d", "#ffff1a", "#ffb300", "#ff6600", "#ff0000", "#990000"]
+
+
+def _polar_extrema(a, size):
+    """極大・極小の (行, 列)。size は格子数。上下端の偽の極値は除く。"""
+    pad = size // 2 + 1
+    mx, mn = maximum_filter(a, size=size, mode="nearest") == a, minimum_filter(a, size=size, mode="nearest") == a
+    for m in (mx, mn):
+        m[:pad, :] = False
+        m[-pad:, :] = False
+    return np.argwhere(mx), np.argwhere(mn)
+
+
+def render_polar(chart, F, init, ft, outpath, model="", quantize=True):
+    """北半球極座標（等高度線・風速シェード・気温）。地域ごとの View は使わない。"""
+    from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap
+    cfg = CHARTS[chart]
+    lv, lat_min, clon = cfg["level"], cfg.get("lat_min", 20), cfg.get("central_lon", 140.0)
+    d = F["p"][lv]
+    st = 2                                         # 0.25°→0.5°に間引く（等値線には十分・計算を軽く）
+    iy = np.where(F["lats"] >= lat_min - 2)[0]
+    lats, lons = F["lats"][iy][::st], F["lons"][::st]
+    sub = lambda a: np.asarray(a)[iy][::st, ::st]
+    ht, tt = sub(d["gh"]), sub(d["t"])
+    wind = np.hypot(sub(d["u"]), sub(d["v"]))
+    lons_c = np.append(lons, lons[0] + 360.0)      # 経度方向を閉じる
+    cyc = lambda a: np.concatenate([a, a[:, :1]], axis=1)
+    proj = ccrs.NorthPolarStereo(central_longitude=clon)
+    X, Y = np.meshgrid(lons_c, lats)
+    p3 = proj.transform_points(PC, X, Y)
+    PX, PY = p3[..., 0], p3[..., 1]                # cartopy 0.26 の contourf(transform) 不具合を避け、自前で投影する
+
+    W, H = 8.4, 8.4
+    fig = plt.figure(figsize=(W, H), dpi=DPI)
+    ax = fig.add_axes([0.01, 42 / (H * DPI), 0.98, 1 - 50 / (H * DPI)], projection=proj)
+    ax.set_extent([-180, 180, lat_min, 90], crs=PC)
+    ax.set_facecolor("#eaf4fb")
+
+    w0, w1, ws = POLAR_WIND[lv]
+    wlev = np.arange(w0, w1 + 1, ws)
+    cmap = LinearSegmentedColormap.from_list("polar_wind", POLAR_COLORS, N=256)
+    ax.contourf(PX, PY, cyc(wind), levels=wlev, cmap=cmap, norm=BoundaryNorm(wlev, 256, extend="max"),
+                extend="max", alpha=0.85, zorder=1)
+    h0, h1, hs, ht2 = POLAR_HGT[lv]
+    cs = ax.contour(PX, PY, cyc(ht), levels=np.arange(h0, h1 + 1, hs), colors="k", linewidths=0.8, zorder=3)
+    cs2 = ax.contour(PX, PY, cyc(ht), levels=np.arange(h0, h1 + 1, ht2), colors="k", linewidths=1.9, zorder=3)
+    ax.clabel(cs2, fontsize=8, fmt="%d", inline=True, inline_spacing=2)
+    if cfg.get("temp"):
+        t0, t1 = POLAR_TEMP[lv]
+        tl = np.arange(int(np.ceil(t0 / 3)) * 3, t1 + 1, 3)
+        ct = ax.contour(PX, PY, cyc(tt), levels=tl, colors="#cc0000", linewidths=0.7,
+                        linestyles="--", zorder=3)
+        ax.clabel(ct, tl[::2], fontsize=7, fmt="%d", inline=True, inline_spacing=1)
+    size = int(round(50 * 1.25 / 0.5 / 2))          # 約31°四方の近傍（tenkizu の 50格子×1.25° を換算）
+    hi, lo = _polar_extrema(ht, size)
+    kw = dict(transform=PC, ha="center", va="center", zorder=6, fontsize=14, fontweight="bold",
+              bbox=dict(boxstyle="round,pad=0.12", facecolor="white", alpha=0.65, edgecolor="none"))
+    for j, i in hi:
+        ax.text(lons[i], lats[j], "H", color="#0033cc", **kw)
+    for j, i in lo:
+        ax.text(lons[i], lats[j], "L", color="#cc0000", **kw)
+    if cfg.get("temp"):
+        wi, ci = _polar_extrema(tt, size)
+        for j, i in wi:
+            ax.text(lons[i], lats[j], "W", transform=PC, ha="center", va="center", zorder=6,
+                    fontsize=11, color="#cc4400", alpha=0.7)
+        for j, i in ci:
+            ax.text(lons[i], lats[j], "C", transform=PC, ha="center", va="center", zorder=6,
+                    fontsize=11, color="#3355cc", alpha=0.85)
+
+    ax.coastlines(resolution="110m", linewidth=0.8, color="#222222", zorder=4)
+    gl = ax.gridlines(crs=PC, draw_labels=False, linewidth=0.5, color="gray", alpha=0.7,
+                      linestyle="--", xlocs=np.arange(-180, 181, 30),
+                      ylocs=np.arange((lat_min // 10 + 1) * 10, 91, 10))
+    gl.set_zorder(4)
+    for lat in range((lat_min // 10 + 1) * 10, 90, 10):
+        ax.text((clon + 180 + 360) % 360 - (360 if (clon + 180) % 360 > 180 else 0), lat + 0.8, f"{lat}N",
+                transform=PC, fontsize=7, color="#444444", ha="center", va="bottom", zorder=5)
+    for s_ in ax.spines.values():
+        s_.set_edgecolor("#1010e0")
+        s_.set_linewidth(2.5)
+
+    valid = init + timedelta(hours=ft)
+    ax.text(0.015, 0.985, f"{valid:%d %H}", transform=ax.transAxes, fontsize=24, family="serif",
+            color="#5a3410", va="top", zorder=30)
+    ax.text(0.015, 0.935, "UTC", transform=ax.transAxes, fontsize=9, family="serif", color="#5a3410",
+            va="top", zorder=30)
+    ax.text(0.006, 0.008, f"{model} INIT:{init:%m/%d %H:%M}(UTC)".strip(), transform=ax.transAxes,
+            fontsize=9, color="k", va="bottom", zorder=30)
+    boxes = [(POLAR_COLORS[min(k + 1, len(POLAR_COLORS) - 1)], None, None) for k in range(len(wlev) - 1)]
+    legend_box(ax, boxes + [(POLAR_COLORS[-1], None, None)], [str(x) for x in wlev] + [""],
+               rect=(0.70, 0.008, 0.29, 0.078))
+    title = f"Z{lv},Wind{lv}" + (",T" + str(lv) if cfg.get("temp") else "")
+    _caption(fig, [(f"{init:%d%H}", "#1010e0", 16), (f"<{ft}>", "#d020d0", 16), (title, "#7a5a30", 16)],
+             y=21 / (H * DPI), fw=W, fh=H)
+    fig.savefig(outpath, dpi=DPI)
+    plt.close(fig)
+    if quantize:
+        _quantize_png(outpath)
+
+
 CHARTS = {
     # 並びは 高層→地上。regions: 作る地域を限る（容量のため。省略=全地域）。levels: 無いモデルでは作らない気圧面
     "instab": dict(label="不安定域（SEPT300−maxEPT・T300）", fn=chart_instab, levels=[300, 850], regions=("japan",)),
     "fax57": dict(label="FAX57相当（500hPa気温・700hPa湿数）", fn=chart_fax57, levels=[500, 700], regions=("japan",)),
     "fax78": dict(label="FAX78相当（850hPa気温・風・700hPa発散）", fn=chart_fax78, levels=[700, 850], regions=("japan",)),
     "qvec850": dict(label="850hPa Qベクトル発散", fn=chart_qvec850, levels=[850], regions=("japan",)),
+    "polar300": dict(label="北半球 300hPa（高度・風速・ジェット）", polar=True, level=300, levels=[300], regions=("polar",)),
+    "polar500": dict(label="北半球 500hPa（高度・気温・風速）", polar=True, level=500, temp=True, levels=[500], regions=("polar",)),
+    "surffax": dict(label="地上FAX（気圧・2m気温・10m風）", fn=chart_surffax, regions=("japan",)),
 }
 
 
@@ -475,19 +599,22 @@ def base_lines(region, proj):
 
 
 # ---------------------------------------------------------------- 枠・見出し
-def _caption(fig, parts, y):
+def _caption(fig, parts, y, fw=None, fh=None):
     """色の違う文字を横に並べる（実際の描画幅で位置を決める）。"""
     r = fig.canvas.get_renderer()
-    x = 4 / (FIG_W * DPI)
+    fw = fw or FIG_W
+    x = 4 / (fw * DPI)
     for text, color, fs in parts:
         t = fig.text(x, y, text, color=color, fontsize=fs, family="serif",
                      va="center", ha="left")
         bb = t.get_window_extent(r)
-        x += bb.width / (FIG_W * DPI) + 8 / (FIG_W * DPI)
+        x += bb.width / (fw * DPI) + 8 / (fw * DPI)
 
 
 def render_chart(chart, region, F, init, ft, outpath, model="", quantize=True):
     """1枚描画して outpath に保存する。init は UTC の datetime。"""
+    if CHARTS[chart].get("polar"):
+        return render_polar(chart, F, init, ft, outpath, model=model, quantize=quantize)
     proj, extent = make_projection(region)
     V = View(F, region)
     fig = plt.figure(figsize=(FIG_W, FIG_H), dpi=DPI)

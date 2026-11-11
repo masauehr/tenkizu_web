@@ -127,7 +127,7 @@ GFS_BASE = "https://noaa-gfs-bdp-pds.s3.amazonaws.com"
 PLEVELS = (975, 925, 850, 700, 500, 300, 200)  # 存在する面だけが使われる（ECMWFオープンデータに975は無い）。200hPaはjet200用
 
 # 読み込み時に切り出す範囲（全地域の bbox の和集合に余白を足したもの）。全球のまま処理すると遅い
-CROP = dict(lon0=50.0, lon1=185.0, lat0=-15.0, lat1=82.0)
+CROP = dict(lon0=0.0, lon1=360.0, lat0=-15.0, lat1=90.0)   # 極座標図のため北半球全体（経度は全周）
 
 
 def parse_init(text: str) -> datetime:

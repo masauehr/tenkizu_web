@@ -8,7 +8,7 @@ import nwp_charts as nc
 
 def test_charts_are_new_only():
     # nwp_chart_web と重複する図種を持たない
-    assert set(nc.CHARTS) == {"instab", "fax57", "fax78", "qvec850"}
+    assert set(nc.CHARTS) == {"instab", "fax57", "fax78", "qvec850", "polar300", "polar500", "surffax"}
 
 
 def test_passes_scale_with_grid():
