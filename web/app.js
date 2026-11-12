@@ -113,7 +113,14 @@
   const regions2Avail = () => [...regionsAvail(), ...(sndCache ? ["sounding"] : []), ...(S.local || customList().length ? ["custom"] : [])];
   const charts2Avail = (region) => (region === "custom" ? (customList().length ? customList().map(customBase) : ["last"])
     : region === "sounding" ? sndKeys(S.t2) : chartsAvail(region));
-  const customText = (c) => `${c.label}（${c.model} ${c.initText}${c.kind === "sounding" ? "" : ` ＋${c.ft}h`}）`;
+  // 登録した日時（公開した時刻 pub）。無ければ作図した時刻（custom.js と同じ表示）
+  const customStamp = (c) => {
+    const t = c.pub || c.created || c.ts;
+    if (!t) return "";
+    const d = new Date(t * 1000), p2 = (n) => String(n).padStart(2, "0");
+    return "　" + (c.pub ? "登録" : "作図") + " " + (d.getMonth() + 1) + "/" + d.getDate() + " " + p2(d.getHours()) + ":" + p2(d.getMinutes());
+  };
+  const customText = (c) => `${c.label}（${c.model} ${c.initText}${c.kind === "sounding" ? "" : ` ＋${c.ft}h`}）${customStamp(c)}`;
   const chartLabel2 = (region, chart) => {
     if (region === "sounding") return sndLabel(chart);
     if (region === "custom") { const c = customFind(chart); return c ? customText(c) : "自由選択（まだ作図していません）"; }

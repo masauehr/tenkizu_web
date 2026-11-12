@@ -112,3 +112,35 @@ def test_cli_validates_image_names(monkeypatch):
         publish.parse_args()
     monkeypatch.setattr(sys, "argv", ["publish.py", "--custom", "emagram_gfs_2026111018_000_0123456789ab.png"])
     assert publish.parse_args().custom == ["emagram_gfs_2026111018_000_0123456789ab.png"]
+
+
+def test_local_publish_item_has_same_shape_as_api(env):
+    """ローカルからの公開も、同じ形: ts＝作図した時刻（条件ファイルの created）・pub＝公開した時刻（登録日時）。
+    ファイルの最終使用時刻（再利用のたびに変わる）は ts に使わない。"""
+    import time
+    src, wt = env
+    name = make(src, 1, 10)                                              # 画像の更新時刻は 1_700_000_000 付近
+    meta_p = (src / name).with_suffix(".json")
+    meta = json.loads(meta_p.read_text(encoding="utf-8"))
+    meta["created"] = 1_650_000_000.0                                    # 作図したのは、ずっと前
+    meta_p.write_text(json.dumps(meta), encoding="utf-8")
+    t0 = time.time()
+    publish.sync_custom(wt, [name], [])
+    item = public_list(wt)[0]
+    assert item["ts"] == 1_650_000_000.0 and "created" not in item and "published" not in item
+    assert t0 - 1 <= item["pub"] <= time.time() + 1                      # 登録日時＝公開した時刻
+    assert {"kind", "mk", "ik", "ft", "label", "model", "initText", "url", "ts", "pub"} <= set(item)
+
+
+def test_old_items_keep_their_registration_time_and_publisher(env):
+    """すでに公開されている項目（API 経由の pub・by つき）は、ローカルの公開で壊れず、そのまま残る。"""
+    src, wt = env
+    d = wt / "output" / "custom"
+    d.mkdir(parents=True)
+    legacy = {"kind": "xsection", "mk": "gfs", "ik": "2026111012", "ft": 12, "label": "断面 x", "model": "GFS", "initText": "x",
+              "url": "output/custom/xsection_gfs_2026111012_012_0123456789ab.png", "ts": 1.0, "pub": 2.0, "by": "tanaka"}
+    (d / "list.json").write_text(json.dumps({"items": [legacy]}), encoding="utf-8")
+    (d / "xsection_gfs_2026111012_012_0123456789ab.png").write_bytes(b"png")
+    publish.sync_custom(wt, [make(src, 5, 10)], [])
+    items = public_list(wt)
+    assert items[0]["ft"] == 5 and items[1] == legacy

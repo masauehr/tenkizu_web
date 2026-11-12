@@ -212,7 +212,10 @@ def sync_custom(wt: Path, add, remove):
         if "条件は不明" in e["label"]:
             raise RuntimeError(f"{name} は条件が分からない（古い）画像のため公開できません。作図し直してください")
         shutil.copy2(custom.CUSTOM_DIR / name, dst / name)
-        new.append({k: v for k, v in e.items() if k != "published"})     # ローカル専用の項目は載せない
+        item = {k: v for k, v in e.items() if k not in ("published", "created")}   # ローカル専用の項目は載せない
+        item["ts"] = e.get("created") or e["ts"]     # 作図した時刻（e["ts"] は画像の最終使用時刻で、再利用のたびに変わるため条件ファイルの created を優先）
+        item["pub"] = time.time()                    # 公開した時刻＝登録日時
+        new.append(item)
     skip = set(add) | set(remove or [])
     items = (new + [x for x in old if Path(x["url"]).name not in skip])[:CUSTOM_MAX]
     want = {Path(x["url"]).name for x in items}
