@@ -28,6 +28,7 @@ tenkizu の CLI 作図（天気図・断面図・エマグラム）を Web で�
 - **実況エマグラム**（`sounding.py`・`update_sounding.py`・`web/sounding.html/js`・`.github/workflows/update-sounding.yml`）:
   - 取得先は `https://weather.uwyo.edu/wsgi/sounding`（HTML の `<PRE>` の固定幅の表を自前で読む）。**siphon は使わない**（旧 URL `weather.arcc.uwyo.edu/cgi-bin/sounding` は 2026 年に 404。tenkizu の `emagram.py` は現在動かない）。形式が変わったら `parse_sounding` と `tests/data/` のサンプルを直す。
   - 地点は取得できる日本の11地点だけ（`sounding.STATIONS`）。**那覇・台湾（花蓮・台北）は Wyoming に無い**（2026-11-12 に確認）ので入れない（取れない地点を毎回取りにいかない）。
+  - **配信元の `robots.txt` は `/wsgi` を全ロボットに Disallow している**（2026-11-12 確認）。自動取得（Actions の定期実行）は、**配信元の了解を得るか、別の取得先（気象庁・NOAA IGRA など）に切り替えるまで有効にしない**。`update-sounding` は無効化中（`gh workflow enable update-sounding.yml` で再開）。ローカルで人が操作する「任意の地点・時刻」（1回ずつの取得）は、ブラウザで開くのと同じ人の操作なので残している。
   - **観測は欠測する・公開が遅れる**。取れない時刻・地点は飛ばし（失敗にしない）、次の実行で取り直す。作成済みは取りにいかない。配信元への要求は間隔を空ける（既定2秒）。**アクセスは控えめにする**（地点・時刻を増やす前に見積もる）。
   - 公開は `publish.py --sounding`（`output/sounding` だけを書き換える。画面・モデルの画像には触れない）。公開するのは直近6観測時刻（約3日分・約10MB）。ローカルで任意に作った図は `output/sounding_custom/`（**公開しない**。`build_site.py` も除外）。
   - **出典・免責の表示を外さない**（図の下端・ページ・manifest の `legal`）。データの利用条件は変わり得るので、公開を続ける間は配信元で確認する。
@@ -43,5 +44,5 @@ tenkizu の CLI 作図（天気図・断面図・エマグラム）を Web で�
 - 設計判断・不具合の原因と対処は [DESIGN.md](DESIGN.md) に記録する。運用手順の変更は [PUBLISH.md](PUBLISH.md)。
 
 ## 定期処理（登録済み）
-- GitHub Actions `update-model`: UTC 17〜23時の :30（12Z初期値の時間帯）。`deploy-web`: `web/**` の push で画面だけ反映。`update-sounding`（実況エマグラム。2026-11-12 追加・push して有効になる）: UTC 3・5・7・15・17・19時の :40（00/12UTC の観測の後に数回試す）。
+- GitHub Actions `update-model`: UTC 17〜23時の :30（12Z初期値の時間帯）。`deploy-web`: `web/**` の push で画面だけ反映。`update-sounding`（実況エマグラム。2026-11-12 追加。**無効化中**: 配信元の robots.txt が取得先を Disallow しているため。決まるまで再開しない）: 再開時は UTC 3・5・7・15・17・19時の :40。
 - launchd: `com.masahiro.tenkizu_web_sync`（30分おき）、`com.masahiro.tenkizu_web_gsm`（1時間おきに確認・00/12Z）、`com.masahiro.tenkizu_web_disk`（6時間おき・ディスク制限と通知。2026-11-11 登録済み。ログ `logs/disk_guard.log`）。止める: `launchctl bootout gui/$(id -u)/<Label>`。
