@@ -12,7 +12,7 @@
   const OUT = "output/";
   const API = "api/";
   const HOUR = 3600e3;
-  const S = { manifest: null, local: false, model: null, model2: null, cmp: false, fig: false, region2: null, chart2: null, init: null, region: null, chart: null, ft: 0, timer: null };
+  const S = { manifest: null, local: false, model: null, model2: null, cmp: false, fig: false, region2: null, chart2: null, t2: null, init: null, region: null, chart: null, ft: 0, timer: null };
   const cache = new Map(); // 先読み画像（再生を滑らかにする）
 
   const imgUrl = (model, init, region, chart, ft) =>
@@ -57,9 +57,9 @@
   // 地域ボタンの並びと表示名（日本周辺は平面図）。北半球が先頭＝初期表示（北半球300hPa）
   const REGION_ORDER = ["polar", "japan", "okinawa", "asia", "xsec", "emagram"];
   const REGION_LABEL = { japan: "平面図", custom: "自由選択（断面図・エマグラム）" };
-  const regionLabel = (r) => (r === "custom" && !S.local ? "保存された断面図・エマグラム（公開分）" : REGION_LABEL[r] || S.manifest.regions[r] || r);
+  const regionLabel = (r) => (r === "sounding" ? "実況エマグラム（気象庁の観測）" : r === "custom" && !S.local ? "保存された断面図・エマグラム（公開分）" : REGION_LABEL[r] || S.manifest.regions[r] || r);
   // 地域を切り替えたときに最初に出す図（無ければ並びの先頭）。エマグラムは那覇
-  const REGION_FIRST_CHART = { polar: "polar300", xsec: "xs130", emagram: "em_47936" };
+  const REGION_FIRST_CHART = { polar: "polar300", xsec: "xs130", emagram: "em_47936", sounding: "47918_emagram" };
   const firstChart = (region, charts) => (charts.includes(REGION_FIRST_CHART[region]) ? REGION_FIRST_CHART[region] : charts[0]);
   const regionRank = (r) => { const i = REGION_ORDER.indexOf(r); return i >= 0 ? i : 100; };
   const chartRank = (c) => {
@@ -87,11 +87,35 @@
   }
   const customBase = (c) => c.url.split("/").pop();    // 画像のファイル名（選択欄の値・URLの chart2 に使う）
   const customFind = (chart) => { const l = customList(); return chart === "last" ? (l[0] || null) : (l.find((c) => customBase(c) === chart) || null); };
+  // 実況エマグラム（気象庁の高層気象観測）: 数値モデルではなく観測なので、予報時間とは連動しない。
+  // 一覧は output/sounding/manifest.json（update_sounding.py が作る）。右の図の「実況エマグラム」で、地点・種類・観測時刻を選ぶ
+  let sndCache = null;
+  const SND_MODE = { emagram: "エマグラム", pt: "温位エマグラム" };
+  async function loadSounding() {
+    try {
+      const j = await (await fetch(OUT + "sounding/manifest.json", { cache: "no-store" })).json();
+      sndCache = Array.isArray(j.times) && j.times.length ? j : null;
+    } catch (e) { sndCache = null; }
+  }
+  const sndTimes = () => (sndCache ? sndCache.times.map((x) => x.time) : []);          // 新しい順
+  const sndStName = (id) => { const s = ((sndCache && sndCache.stations) || []).find((x) => x.id === id); return s ? s.name : id; };
+  const sndKeys = (t) => {                                                              // 観測時刻 t にある図: "地点_種類"
+    const e = sndCache && sndCache.times.find((x) => x.time === t);
+    return e ? Object.entries(e.stations).flatMap(([st, modes]) => modes.map((m) => `${st}_${m}`)) : [];
+  };
+  const sndLabel = (k) => { const [st, m] = k.split("_"); return `${sndStName(st)}（${st}）${SND_MODE[m] || m}`; };
+  function sndFmtTime(t) {
+    const d = new Date(Date.UTC(+t.slice(0, 4), +t.slice(4, 6) - 1, +t.slice(6, 8), +t.slice(8, 10)) + 9 * HOUR);
+    return `${t.slice(4, 6)}/${t.slice(6, 8)} ${t.slice(8, 10)}UTC（日本時間 ${pad(d.getUTCMonth() + 1)}/${pad(d.getUTCDate())} ${pad(d.getUTCHours())}時）`;
+  }
+
   // 自由選択は、ローカルサーバーで開いているとき（作図の有無にかかわらず）か、作図済みの結果があるときに選べる
-  const regions2Avail = () => [...regionsAvail(), ...(S.local || customList().length ? ["custom"] : [])];
-  const charts2Avail = (region) => (region === "custom" ? (customList().length ? customList().map(customBase) : ["last"]) : chartsAvail(region));
+  const regions2Avail = () => [...regionsAvail(), ...(sndCache ? ["sounding"] : []), ...(S.local || customList().length ? ["custom"] : [])];
+  const charts2Avail = (region) => (region === "custom" ? (customList().length ? customList().map(customBase) : ["last"])
+    : region === "sounding" ? sndKeys(S.t2) : chartsAvail(region));
   const customText = (c) => `${c.label}（${c.model} ${c.initText} ＋${c.ft}h）`;
   const chartLabel2 = (region, chart) => {
+    if (region === "sounding") return sndLabel(chart);
     if (region === "custom") { const c = customFind(chart); return c ? customText(c) : "自由選択（まだ作図していません）"; }
     return S.manifest.charts[chart] || chart;
   };
@@ -102,6 +126,7 @@
   }
   function validFig() {
     if (!regions2Avail().includes(S.region2)) { defaultFig(); return; }
+    if (S.region2 === "sounding" && !sndTimes().includes(S.t2)) S.t2 = sndTimes()[0];           // 観測時刻が無ければ最新
     if (S.region2 === "custom" && S.chart2 === "last" && customList().length) S.chart2 = customBase(customList()[0]);   // 「最新」は先頭の画像に置き換える
     const cs = charts2Avail(S.region2);
     if (!cs.includes(S.chart2)) S.chart2 = firstChart(S.region2, cs);
@@ -146,7 +171,7 @@
   // ---------- URLハッシュ（リロード・共有で状態を保つ）
   function saveHash() {
     history.replaceState(null, "", `#model=${S.model}&init=${S.init}&region=${S.region}&chart=${S.chart}&ft=${S.ft}` +
-      (S.cmp ? `&cmp=1&model2=${S.model2}` : "") + (S.fig ? `&fig=1&region2=${S.region2}&chart2=${S.chart2}` : ""));
+      (S.cmp ? `&cmp=1&model2=${S.model2}` : "") + (S.fig ? `&fig=1&region2=${S.region2}&chart2=${S.chart2}` + (S.region2 === "sounding" ? `&t2=${S.t2}` : "") : ""));
   }
   function loadHash() {
     return Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
@@ -169,6 +194,7 @@
     }
     $("updated").textContent = "更新 " + updatedUtc(m.updated);
 
+    await loadSounding();                             // 実況エマグラムの一覧（無ければ選択肢に出さない）
     S.local = await loadCustom();                     // ローカルサーバーなら自由選択の一覧が返る（公開サイトでは取得できない）
     const h = loadHash();
     const models = modelKeys();
@@ -176,7 +202,7 @@
     S.init = inits().some((i) => i.init === h.init) ? h.init : inits()[0].init;
     S.cmp = h.cmp === "1" && models.length > 1;
     S.fig = h.fig === "1" && !S.cmp;
-    S.region2 = h.region2 || null; S.chart2 = h.chart2 || null;
+    S.region2 = h.region2 || null; S.chart2 = h.chart2 || null; S.t2 = h.t2 || null;
     S.model2 = models.includes(h.model2) && h.model2 !== S.model ? h.model2 : (models.find((k) => k !== S.model) || null);
     const regs = regionsAvail();
     S.region = regs.includes(h.region) ? h.region : regs[0];
@@ -246,8 +272,13 @@
     for (const r of regions2Avail()) rs.add(new Option(regionLabel(r), r));
     for (const c of charts2Avail(S.region2)) cs.add(new Option(chartLabel2(S.region2, c), c));
     rs.value = S.region2; cs.value = S.chart2;
+    const ts = $("sndTSel");
+    ts.hidden = S.region2 !== "sounding";
+    ts.innerHTML = "";
+    if (S.region2 === "sounding") { for (const t of sndTimes()) ts.add(new Option(sndFmtTime(t), t)); ts.value = S.t2; }
   }
-  $("region2Sel").onchange = (e) => { S.region2 = e.target.value; S.chart2 = firstChart(S.region2, charts2Avail(S.region2)); buildFigSelects(); update(); };
+  $("sndTSel").onchange = (e) => { S.t2 = e.target.value; buildFigSelects(); update(); };       // 観測時刻を変えたら、その時刻にある地点へ寄せる
+  $("region2Sel").onchange = (e) => { S.region2 = e.target.value; if (S.region2 === "sounding" && !sndTimes().includes(S.t2)) S.t2 = sndTimes()[0]; S.chart2 = firstChart(S.region2, charts2Avail(S.region2)); buildFigSelects(); update(); };
   $("chart2Sel").onchange = (e) => { S.chart2 = e.target.value; update(); };
 
   // 出典・ライセンス・免責・改変の表示（配信元の利用条件に基づく。文言は manifest.json から読む）
@@ -340,6 +371,13 @@
 
   // 別の図を並べる: 右の枠。自由選択（ローカル）の結果なら、保存された画像をそのまま出す（予報時間とは連動しない）
   function renderFig() {
+    if (S.region2 === "sounding") {                  // 実況エマグラム: 観測の画像をそのまま出す（予報時間とは連動しない）
+      const img = $("chartImg2"), nodata = $("noData2"), [st, m] = S.chart2.split("_");
+      nodata.hidden = true;
+      img.onerror = () => { nodata.textContent = "実況エマグラムの画像が見つかりません（公開の更新の途中かもしれません）"; nodata.hidden = false; };
+      img.src = `${OUT}sounding/${S.t2}/${st}_${m}.png`;
+      return { snd: { t: S.t2, key: S.chart2 } };
+    }
     if (S.region2 !== "custom") return renderView(2, S.model, S.region2, S.chart2);
     const c = customFind(S.chart2), img = $("chartImg2"), nodata = $("noData2");
     if (!c) {
@@ -358,6 +396,9 @@
     if (!r) return head + "画像なし";
     const note = r.init !== S.init ? "（別の初期値・予報時刻を合わせて表示）" : (r.exact ? "" : `（FT${r.ft}h＝直前の予報時間）`);
     return head + `初期値 ${fmt(parseInit(r.init), 0, "UTC")} ＋${r.ft}h${note}`;
+  }
+  function capSnd() {
+    return `<b>実況エマグラム（気象庁の観測）</b> ｜ ${esc(sndLabel(S.chart2))} ｜ 観測 ${esc(sndFmtTime(S.t2))}（観測の図。予報時間とは連動しません）`;
   }
   function capCustom() {
     const c = customFind(S.chart2);
@@ -401,8 +442,9 @@
 
     if (S.fig) {
       $("cap1").innerHTML = capFig(S.model, S.region, S.chart, r1);
-      $("cap2Text").innerHTML = S.region2 === "custom" ? capCustom() : capFig(S.model, S.region2, S.chart2, r2);
-      if (r2 && r2.custom) { $("dl2").href = r2.custom.url; $("dl2").download = r2.custom.url.split("/").pop(); }
+      $("cap2Text").innerHTML = S.region2 === "sounding" ? capSnd() : S.region2 === "custom" ? capCustom() : capFig(S.model, S.region2, S.chart2, r2);
+      if (r2 && r2.snd) { $("dl2").href = $("chartImg2").getAttribute("src"); $("dl2").download = `sounding_${r2.snd.t}_${r2.snd.key}.png`; }
+      else if (r2 && r2.custom) { $("dl2").href = r2.custom.url; $("dl2").download = r2.custom.url.split("/").pop(); }
       else if (r2) {
         $("dl2").href = imgUrl(S.model, r2.init, S.region2, S.chart2, r2.ft);
         $("dl2").download = `${S.model}_${r2.init}_${S.region2}_${S.chart2}_FT${r2.ft}.png`;

@@ -23,7 +23,7 @@ tenkizu の CLI 作図（天気図・断面図・エマグラム）を Web で�
 - 画用紙版の保存キーは `tenkizuBoard.v1`。**同じドメイン（masauehr.github.io）の nwp_chart_web と localStorage を共有する**ため、キー名を共通にしない。
 - ローカルのディスク: 自由選択で取得した GRIB2（`data/ecmwf`・`data/gfs`）と `output/custom` は `disk_guard.py` が上限を超えた分を古い順に削除する。**GSM のデータ（`data/gsm`）と作図済み画像は消さない**（警告のみ）。消す対象を増やすときは `groups()` の `prune` を確認する。
 - 自由選択の「最近の作図」は、`output/custom/` の画像と同名の `.json`（条件）から `/api/custom/list` が作る。ブラウザの localStorage に履歴を持たせない（別のブラウザで見えなくなる）。画像を消す処理は `.json` も一緒に消すこと。
-- 通常版の「別の図を並べる」（`web/app.js`。右に別の地域の図／自由選択の直近10件。公開サイトは `output/custom/list.json` の公開分。2モデル比較とは同時に使えない）。nwp_chart_web にも同じ機能があるが、**別々にコピーしてある**（直すときは両方を見る）。
+- 通常版の「別の図を並べる」（`web/app.js`。右に別の地域の図／自由選択の直近10件。公開サイトは `output/custom/list.json` の公開分。2モデル比較とは同時に使えない）。nwp_chart_web にも同じ機能があるが、**別々にコピーしてある**（直すときは両方を見る）。  実況エマグラム（`sounding`）も右に選べる（`output/sounding/manifest.json` を読む。`S.t2`＝観測時刻・URLハッシュ `t2`。予報時間とは連動しない）。
 - **公開版では新しい断面図・エマグラムは作れない**（Pages は静的。作図は Python が要る）。代わりに、ローカルで作った図を `publish.py --custom` で gh-pages の `output/custom/`（直近10件）に載せ、公開版でも右の図に並べて見られる。公開は画面で2回押して確定した画像だけ（自動では載せない）。公開した名前は手元の `output/custom/published.json` に記録する。`sync_web`・`sync_model` は `output/custom/` に触れないこと。
 - **実況エマグラム**（`sounding.py`・`update_sounding.py`・`web/sounding.html/js`・`.github/workflows/update-sounding.yml`）:
   - **取得元は気象庁**「過去の気象データ検索（高層）」の指定気圧面の観測データ（`https://www.data.jma.go.jp/obd/stats/etrn/upper/view/hourly_usp.php?year=&month=&day=&hour=&atm=&point=<WMO番号>&view=`）。**「時」は日本時間**（00UTC＝9時・12UTC＝21時）。地上＋標準の気圧面（約25層）の高度・気温・相対湿度・風（露点は気温と相対湿度から計算。250hPa より上は湿度が無い）。robots.txt なし。**公共データ利用規約（第1.0版）: 出典と、加工した旨を記載**（図の下端・ページ・manifest の `legal`。外さない）。形式が変わったら `parse_jma` と `tests/data/jma_*.html` を直す。
