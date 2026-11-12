@@ -38,7 +38,7 @@ def main():
     def ignore(d, names):
         skip = set(base_ignore(d, names))
         if Path(d).resolve() == (ROOT / "output").resolve():
-            skip |= {n for n in names if n in local_only or n == "custom"}   # custom=ローカルの自由選択で作った画像（公開しない）
+            skip |= {n for n in names if n in local_only or n in ("custom", "sounding_custom")}   # custom・sounding_custom=ローカルで任意に作った画像（公開しない）
         return skip
 
     shutil.copytree(ROOT / "output", out / "output", dirs_exist_ok=True, ignore=ignore)

@@ -9,6 +9,8 @@
   GET  /api/custom/list → 自由選択で作った画像の「最近の作図」（直近10件・新しい順。画像ファイルから作る）
   POST /api/custom/publish・unpublish → 自由選択で作った画像を公開サイトに載せる／外す（publish.py --custom。ローカルのみ）
   GET  /api/disk    → ローカルのディスク使用量と上限（disk_guard.py。ローカルからのみ）
+  GET  /api/sounding → 実況の高層ゾンデ（ワイオミング大学）から任意の地点・時刻のエマグラムを作る（sounding.py。ローカルからのみ）
+                      ?wmo=47918&time=YYYYMMDDHH&mode=emagram|pt  → output/sounding_custom/（公開しない）
   GET  /api/custom  → 任意の断面線・地点で断面図／エマグラムを作る（custom.py。ローカルからのみ）
                       ?kind=xsection&model=gfs&init=YYYYMMDDHH&ft=12&lat1=45&lon1=130&lat2=25&lon2=130
                       ?kind=emagram&model=gfs&init=YYYYMMDDHH&ft=12&lat=26.2&lon=127.7
@@ -108,6 +110,9 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/custom":
             self._custom()
             return
+        if path == "/api/sounding":
+            self._sounding()
+            return
         if path == "/api/custom/list":
             if self._local_only():
                 self._json(200, {"items": custom.list_recent()})
@@ -137,6 +142,24 @@ class Handler(SimpleHTTPRequestHandler):
             self._json(500, {"error": f"作図に失敗しました: {e!r}"})
             return
         self._json(200, {"url": "output/custom/" + out.name})
+
+    def _sounding(self):
+        """/api/sounding?wmo=47918&time=YYYYMMDDHH&mode=emagram|pt（実況の高層ゾンデ。任意の地点・時刻。ローカルのみ）"""
+        if not self._local_only():
+            return
+        import sounding
+        q = {k: v[0] for k, v in parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "").items()}
+        try:
+            wmo, dt, mode = sounding.validate_request(q.get("wmo"), q.get("time"), q.get("mode") or "emagram")
+            with _custom_lock:                       # 取得と作図は同時に1つだけ（配信元に負荷をかけない）
+                out = sounding.render_custom(wmo, dt, mode)
+        except (ValueError, sounding.SoundingError) as e:
+            self._json(400, {"error": str(e)})
+            return
+        except Exception as e:   # 想定外の失敗は内容を返す（ローカル専用なので詳細を出してよい）
+            self._json(500, {"error": f"作図に失敗しました: {e!r}"})
+            return
+        self._json(200, {"url": "output/sounding_custom/" + out.name})
 
     def _body(self):
         """POSTの本文（JSON）。なければ空dict"""

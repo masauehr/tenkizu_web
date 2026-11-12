@@ -75,13 +75,26 @@ tenkizu（CLI で描いていた天気図・断面図・エマグラム）を、
 - 公開した画像の名前は、手元の `output/custom/published.json` に記録される（自由選択の「最近の作図」に【公開中】と出すため）。
 - 公開は `publish.py --custom` が行い、公開ブランチ（gh-pages）の `output/custom/` だけを書き換える。モデルの画像や画面ファイルには触れない（CI の自動更新とも干渉しない）。
 
+### 実況エマグラム（高層ゾンデの観測・2026-11-12〜）
+画面上部の **「実況エマグラム」**（`sounding.html`）。気象庁の高層気象観測（ラジオゾンデ。ふつう 00UTC と 12UTC に、気球で上空を観測）の**実況**を、ワイオミング大学が公開しているデータから作ったエマグラム。**数値モデルの予報ではなく観測**なので、同じ地点のモデルのエマグラム（断面図・エマグラム作成）と見比べられる。
+
+- **地点**: 稚内・秋田・輪島・館野・八丈島・潮岬・福岡・鹿児島・名瀬・石垣島・南大東島（日本の11地点）。**那覇と台湾（花蓮・台北）は、ワイオミング大学に無いので載せられない**。
+- **時刻**: 直近6観測時刻（約3日分）。観測は**欠測する**ことがあり（例: 八丈島・石垣島などで時々）、その時刻は一覧に出ない。観測から公開までに数時間かかる。
+- **図**: 「エマグラム」（赤＝気温・緑＝露点・灰＝持ち上げ気塊・CAPE/CIN・風矢羽・ホドグラフ）と「温位エマグラム」（黒＝θ・緑＝θe・赤＝θes・紫＝θw）。ボタンで切り替える。
+- **操作**: 地点・観測時刻の選択、「◀ 前」「次 ▶」（キーボードの ← →）で観測時刻を1つずつ動かす。URL（`#st=…&t=…&m=…`）で、見ている地点・時刻・図を共有できる。
+- **ローカルでは任意の地点・時刻も作れる**（ページ下の「任意の地点・時刻（ローカルのみ）」）。WMO 番号（5桁。国外も可）・日付・時（00/06/12/18UTC）・図を指定して「作図」（数秒。取得して作る）。作った図は `output/sounding_custom/` に置かれ、**公開されない**。データが無い地点・時刻は「観測データがありません」と出る。
+- **更新**: GitHub Actions `update-sounding` が UTC 3・5・7・15・17・19時の :40 に、直近6観測時刻ぶんのうち**未作成のものだけ**を取得して作る（作成済みは取りにいかない。取れなかった分は次回に回る）。公開は `publish.py --sounding`（`output/sounding` だけを書き換える）。1地点・1時刻あたり約150KB で、全体で約10MB。
+- 手動で作る: `python update_sounding.py`（直近6時刻×全地点）、`--times 2`・`--stations 47918,47646`・`--force`。画面に反映するのは `python publish.py --sounding`。
+- 取得先は `https://weather.uwyo.edu/wsgi/sounding`（HTML の表を読む）。tenkizu の `emagram.py`（siphon 使用）は、同大学のサイト更新で旧い URL が 404 になったため、現在は動かない。
+
 ## 3. データと更新
 
 | 項目 | 内容 |
 |---|---|
 | 元データ | ECMWF オープンデータ（CC BY 4.0）、NOAA GFS（0.25°）、気象庁GSM（京大RISH配信・ローカル専用）。必要な変数と気圧面（1000〜100hPaの13層）だけを部分取得し、GRIB2 は作図後に捨てる |
 | 公開の更新 | GitHub Actions `update-model`。**12Z初期値が揃う時間帯**（UTC 17〜23時の :30、1日7回）に自動実行。GFS 12Z は 16〜18時、ECMWF 12Z は 20〜23時UTC に揃う。00Z・18Z は定期実行に入れていない（手動実行のときだけ載る） |
-| 画面の反映 | `web/**` を push すると、`deploy-web` が画像を作らず画面だけ数十秒で反映 |
+| 画面の反映 | `web/**` を push すると、`deploy-web` が画像を作らず画面だけ数十秒で反映（モデル・実況の公開は画面に触れない） |
+| 実況エマグラム | GitHub Actions `update-sounding`。UTC 3・5・7・15・17・19時の :40。ワイオミング大学の高層ゾンデ（観測）。直近6観測時刻・約10MB。詳しくは上の「実況エマグラム」 |
 | 公開される量 | ECMWF 5初期値・GFS 4初期値（約2日分）。1初期値は約20MB。GitHub Pages は 1GB が目安 |
 | ローカルの更新 | launchd のジョブ: `com.masahiro.tenkizu_web_sync`（公開分の画像を30分おきに取り込む）、`com.masahiro.tenkizu_web_gsm`（GSM を 00/12Z だけ取得・3日保管）、`com.masahiro.tenkizu_web_disk`（ディスク使用量のチェック。下の「ディスク使用量の制限と通知」を参照） |
 
@@ -113,12 +126,15 @@ tenkizu（CLI で描いていた天気図・断面図・エマグラム）を、
 - 手動の確認・整理: `python disk_guard.py`（表示だけ）、`python disk_guard.py --prune`（上限超過分を削除）、`python disk_guard.py --test-notify`（通知が出るかの確認）。
 
 ## 4. 出典・免責
+- **実況エマグラム**: 高層気象観測（ラジオゾンデ）のデータは University of Wyoming, Department of Atmospheric Science（weather.uwyo.edu）。観測値をそのまま図にしたもので、気象庁の公式な図ではない。図の下端・ページ・manifest に出典を表示している（外さない）。利用条件は変わり得るので、公開を続ける間は配信元で確認する。
 - ECMWF: © ECMWF, IFS open data, CC BY 4.0。加工して作図したもので、ECMWF の公式な図ではない。
 - GFS: NOAA/NCEP（米国政府の成果物）。加工して作図したもので、公式な図ではない。
 - 予報は不確実性を含む。防災・安全の判断には、気象庁など公的機関の公式情報を使うこと。
 - 出典・免責の詳しい表示は画面下とボタン「出典・免責」にある。
 
 ## 5. 困ったとき
+- **実況エマグラムに、ある地点・時刻が出ない**: 観測が欠測か、まだワイオミング大学に公開されていない（観測から数時間かかる）。次の `update-sounding` の実行で取り直す。那覇・台湾はそもそも無い。ローカルで確かめるなら `python update_sounding.py --stations 47918 --times 2`。
+- **実況エマグラムが全部取れない・「形式が変わった可能性」と出る**: ワイオミング大学のサイトの形式が変わった。`https://weather.uwyo.edu/wsgi/sounding?datetime=YYYY-MM-DD%20HH:00:00&id=47918&src=UNKNOWN&type=TEXT:LIST` をブラウザで開いて表の形を確認し、`sounding.parse_sounding` を直す（`tests/data/` のサンプルも）。
 
 | 症状 | 原因と対処 |
 |---|---|
@@ -139,6 +155,8 @@ tenkizu（CLI で描いていた天気図・断面図・エマグラム）を、
     ├── nwp_charts.py        図の定義（CHARTS・REGIONS）と描画（平面図・北半球図・地上FAX）
     ├── xsection.py          鉛直断面図（固定断面 SECTIONS）
     ├── emagram.py           エマグラム（固定地点 STATIONS）
+    ├── sounding.py          実況の高層ゾンデ（ワイオミング大学）の取得・読み取り・エマグラム／温位エマグラムの描画
+    ├── update_sounding.py   実況エマグラムを直近の観測時刻ぶん作る（CI から）
     ├── custom.py            ローカルの自由選択（任意の断面線・地点）
     ├── disk_guard.py        ディスク使用量の制限・通知（ローカル）
     ├── make_charts.py       取得→作図→manifest 更新の本体
@@ -150,18 +168,21 @@ tenkizu（CLI で描いていた天気図・断面図・エマグラム）を、
     ├── web/                 画面（Vanilla JS）
     │   ├── index.html・app.js・style.css      通常版（2モデル比較・別の図を並べる・使い方）
     │   ├── board/（index.html・board.js・board.css）  画用紙版
-    │   └── custom.html・custom.js・coast.json  自由選択（断面図・エマグラム）とその地図用の海岸線
+    │   ├── custom.html・custom.js・coast.json  自由選択（断面図・エマグラム）とその地図用の海岸線
+    │   └── sounding.html・sounding.js          実況エマグラム（観測）
     ├── launchd/             ローカル定期更新の plist
     │   ├── com.masahiro.tenkizu_web_sync.plist   公開分の取り込み（30分おき）
     │   ├── com.masahiro.tenkizu_web_gsm.plist    GSM の取得（00/12Z・1時間おきに確認）
     │   └── com.masahiro.tenkizu_web_disk.plist   ディスク使用量のチェック（6時間おき）
-    ├── .github/workflows/   update-model.yml・deploy-web.yml
+    ├── .github/workflows/   update-model.yml・deploy-web.yml・update-sounding.yml
+    ├── requirements-sounding.txt   実況エマグラム用の軽い依存（CI の update-sounding）
     └── tests/               pytest（図種・断面の表示要素・エマグラムの地図・自由選択の履歴・公開掲載・ディスク制限）
         ├── test_charts.py            図種の一覧・エマグラム・自由選択の入力検証など
         ├── test_xsection_options.py  断面図の表示要素（全組み合わせの描画）
         ├── test_emagram_map.py       エマグラムの地点の地図（●）
         ├── test_custom_history.py    「最近の作図」（画像ファイルから作る一覧）
         ├── test_publish_custom.py    公開サイトへの掲載（直近10件・外す・他に触れない）
+        ├── test_sounding.py          実況エマグラム（読み取り・取得の分岐・描画・一覧・作成の省略と欠測・公開・画面に触れない）。実際の応答を tests/data に保存
         └── test_disk_guard.py        ディスク使用量の制限・通知
 
 ## 7. 改修履歴
@@ -181,3 +202,4 @@ tenkizu（CLI で描いていた天気図・断面図・エマグラム）を、
 | 2026-11-11 | nwp_chart_web 由来の古い記述を整理（画用紙版ヘルプの刻み・更新の表、AIFS・JRA-55・GSM 0.125°域の処理。GSM の定期取得で余分な Rjp ファイルを取らなくなった） |
 | 2026-11-11 | 通常版にヘルプ（使い方・図の読み方・更新時刻の目安。ボタンと H キー）を追加 |
 | 2026-11-11 | 初期画面の変更（通常版は北半球300hPa・平面図に改名・高度順、画用紙版は高度順・断面140E追加）、画用紙版の整理（範囲・モデルの選択欄と広さ違いを削除、整列と初期化の分離、北半球図が隠れない敷き詰め、登録した配置を選び直せるよう修正）、通常版のエマグラムは那覇から |
+| 2026-11-12 | **実況エマグラムを追加**（気象庁の高層気象観測＝ラジオゾンデの実況。ワイオミング大学のデータ。日本の11地点・エマグラム／温位エマグラム・直近6観測時刻。`sounding.html`・`sounding.py`・`update_sounding.py`・Actions `update-sounding`・`publish.py --sounding`。ローカルは任意の地点・時刻も作れる）。tenkizu の `emagram.py`（siphon）が動かなくなっていた原因（旧 URL の 404）を調べ、新しい取得先を自前で読む方式にした。那覇・台湾は Wyoming に無い。あわせて、**モデルの公開が画面ファイルを古い `web/` で上書きする競合を修正**（nwp_chart_web で発生した不具合と同じ。モデル・実況の公開は画面に触れない） |

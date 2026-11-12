@@ -1,0 +1,8 @@
+# 実況エマグラム（update_sounding.py・GitHub Actions の update-sounding）用の軽い依存。
+# 天気図用の requirements.txt（cartopy・pygrib など重いもの）は要らない。
+numpy
+scipy
+matplotlib
+metpy
+requests
+pillow

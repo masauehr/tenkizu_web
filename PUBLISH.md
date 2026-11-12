@@ -5,8 +5,19 @@
 
 ## 公開するもの・しないもの
 - 公開: ECMWF・GFS（`nwp_data.MODELS` の `publish_hours` / `publish_keep`）。地域は日本周辺・北半球・鉛直断面（固定: 130E・140E）・エマグラム（固定5地点）。
-- 公開しない: GSM（`local_only`）、`output/custom/`（自由選択で作った画像。`build_site.py` が除外）。`publish.py` は GSM の指定を拒否する。
+- 公開しない: GSM（`local_only`）、`output/custom/`（自由選択で作った画像。`build_site.py` が除外）、`output/sounding_custom/`（ローカルで任意に作った実況）。`publish.py` は GSM の指定を拒否する。
+- 公開（追加）: 実況エマグラム（`output/sounding`。下の節）。
+- **画面ファイルの反映は `deploy-web` だけ**。モデルの公開（`publish.py --model`）・実況の公開（`--sounding`）は画面に触れない（古い `web/` で動いていたジョブが、画面を直した直後に終わって古い画面で上書きする競合があったため。公開ブランチが無い初回だけ例外）。画面を直して push したら、公開サイト（gh-pages）の該当ファイルが新しいか確認する。
 - `web/custom.html`（自由選択）は静的サイトでは動かない（`/api/custom` が無い）。ローカルサーバーでだけ使う。
+
+## 実況エマグラム（update-sounding・2026-11-12〜）
+- **何を公開するか**: 気象庁の高層気象観測（ラジオゾンデ）の実況エマグラム。ワイオミング大学のデータ（`https://weather.uwyo.edu/wsgi/sounding`）。日本の11地点×直近6観測時刻（00/12UTC）×2種類（エマグラム・温位エマグラム）。gh-pages の `output/sounding/<観測時刻>/<WMO番号>_<図>.png` と `output/sounding/manifest.json`。約10MB。
+- **更新**: `.github/workflows/update-sounding.yml`（UTC 3・5・7・15・17・19時の :40。00/12UTC の観測の後に数回試す。GitHub の `schedule` なので遅れることがある。観測は急ぎではない）。手順は `publish.py --pull --sounding`（公開済みを取り込む）→ `update_sounding.py`（未作成だけ取得・作図）→ `publish.py --sounding`（`output/sounding` だけを反映）。`workflow_dispatch` で手動実行・`force` で作り直せる。
+- **取れない時刻・地点**は飛ばして次回に回す（観測の欠測・公開の遅れがあるため）。全部失敗したときだけ、ワークフローが失敗する。
+- **配信元への負荷**: 要求の間隔は2秒。作成済みは取りにいかない。地点・時刻を増やすときは、要求の数を見積もる。
+- **初回**: 画面（`web/sounding.html`）と `update-sounding.yml` を push したら、Actions から `update-sounding` を手動実行して、最初の画像を公開する。
+- **ローカルで任意に作った図**（`output/sounding_custom/`）は公開しない（`build_site.py` も除外）。
+- **依存**は `requirements-sounding.txt`（軽い。cartopy・pygrib は要らない）。日本語フォントは CI で `fonts-noto-cjk` を入れる。
 
 ## 公開を始めたときの手順（記録。2026-11-11 実施済み）
 1. GitHub の Settings → Pages で、配信元を `gh-pages` ブランチ（/ root）にする。

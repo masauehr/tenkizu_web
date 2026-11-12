@@ -3,6 +3,7 @@
 ## 概要
 tenkizu の CLI 作図（天気図・断面図・エマグラム）を Web で見られるようにする。公開サイト https://masauehr.github.io/tenkizu_web/ 。マニュアルは [tenkizu-web.md](tenkizu-web.md)、設計・経緯は [DESIGN.md](DESIGN.md)、運用は [PUBLISH.md](PUBLISH.md)。
 **nwp_chart_web に無い図だけ**を作る（重複する図は作らない）。nwp_chart_web とは**共通部品化しない**（コピーして調整。各リポジトリは単独で動く）。
+**実況エマグラム**（気象庁の高層気象観測＝ラジオゾンデの実況。ワイオミング大学のデータ）も載せる（`sounding.py`・`update_sounding.py`・`web/sounding.html`。数値モデルではなく観測）。
 
 ## 実行環境
 - 画面を直して確認するとき: **古いサーバーが残っていると、新しいサーバーはポート使用中で起動に失敗し、新機能が効かないように見える**。`lsof -nP -iTCP:8791 -sTCP:LISTEN` で待ち受けているプロセスを確認してから起動する。URL の `#` 以降だけを変えても再読み込みされない。
@@ -24,6 +25,13 @@ tenkizu の CLI 作図（天気図・断面図・エマグラム）を Web で�
 - 自由選択の「最近の作図」は、`output/custom/` の画像と同名の `.json`（条件）から `/api/custom/list` が作る。ブラウザの localStorage に履歴を持たせない（別のブラウザで見えなくなる）。画像を消す処理は `.json` も一緒に消すこと。
 - 通常版の「別の図を並べる」（`web/app.js`。右に別の地域の図／自由選択の直近10件。公開サイトは `output/custom/list.json` の公開分。2モデル比較とは同時に使えない）。nwp_chart_web にも同じ機能があるが、**別々にコピーしてある**（直すときは両方を見る）。
 - **公開版では新しい断面図・エマグラムは作れない**（Pages は静的。作図は Python が要る）。代わりに、ローカルで作った図を `publish.py --custom` で gh-pages の `output/custom/`（直近10件）に載せ、公開版でも右の図に並べて見られる。公開は画面で2回押して確定した画像だけ（自動では載せない）。公開した名前は手元の `output/custom/published.json` に記録する。`sync_web`・`sync_model` は `output/custom/` に触れないこと。
+- **実況エマグラム**（`sounding.py`・`update_sounding.py`・`web/sounding.html/js`・`.github/workflows/update-sounding.yml`）:
+  - 取得先は `https://weather.uwyo.edu/wsgi/sounding`（HTML の `<PRE>` の固定幅の表を自前で読む）。**siphon は使わない**（旧 URL `weather.arcc.uwyo.edu/cgi-bin/sounding` は 2026 年に 404。tenkizu の `emagram.py` は現在動かない）。形式が変わったら `parse_sounding` と `tests/data/` のサンプルを直す。
+  - 地点は取得できる日本の11地点だけ（`sounding.STATIONS`）。**那覇・台湾（花蓮・台北）は Wyoming に無い**（2026-11-12 に確認）ので入れない（取れない地点を毎回取りにいかない）。
+  - **観測は欠測する・公開が遅れる**。取れない時刻・地点は飛ばし（失敗にしない）、次の実行で取り直す。作成済みは取りにいかない。配信元への要求は間隔を空ける（既定2秒）。**アクセスは控えめにする**（地点・時刻を増やす前に見積もる）。
+  - 公開は `publish.py --sounding`（`output/sounding` だけを書き換える。画面・モデルの画像には触れない）。公開するのは直近6観測時刻（約3日分・約10MB）。ローカルで任意に作った図は `output/sounding_custom/`（**公開しない**。`build_site.py` も除外）。
+  - **出典・免責の表示を外さない**（図の下端・ページ・manifest の `legal`）。データの利用条件は変わり得るので、公開を続ける間は配信元で確認する。
+- **モデルの公開（`publish.py --model`）・実況の公開（`--sounding`）は画面ファイル（web/）を上書きしない**（`should_sync_web`。画面の反映は `deploy-web` だけ。公開ブランチが無い初回だけ例外）。起動時の古い `web/` を持つジョブが、画面を直して push した後に終わって古い画面で上書きする競合があった（nwp_chart_web で 2026-11-12 に発生し、同日この repo にも同じ修正を入れた）。
 - ローカルサーバーの既定ポートは **8791**（nwp_chart_web は 8790。同時に動かせるよう分けてある）。
 - 公開サイトの容量は 1GB が目安（1初期値 約20MB）。公開個数・図種・地域を増やす前に見積もる。
 - 図の見た目を変えたら、公開側の既存画像は作り直さないと変わらない（Actions の update-model を `force=true` で手動実行）。
@@ -35,5 +43,5 @@ tenkizu の CLI 作図（天気図・断面図・エマグラム）を Web で�
 - 設計判断・不具合の原因と対処は [DESIGN.md](DESIGN.md) に記録する。運用手順の変更は [PUBLISH.md](PUBLISH.md)。
 
 ## 定期処理（登録済み）
-- GitHub Actions `update-model`: UTC 17〜23時の :30（12Z初期値の時間帯）。`deploy-web`: `web/**` の push で画面だけ反映。
+- GitHub Actions `update-model`: UTC 17〜23時の :30（12Z初期値の時間帯）。`deploy-web`: `web/**` の push で画面だけ反映。`update-sounding`（実況エマグラム。2026-11-12 追加・push して有効になる）: UTC 3・5・7・15・17・19時の :40（00/12UTC の観測の後に数回試す）。
 - launchd: `com.masahiro.tenkizu_web_sync`（30分おき）、`com.masahiro.tenkizu_web_gsm`（1時間おきに確認・00/12Z）、`com.masahiro.tenkizu_web_disk`（6時間おき・ディスク制限と通知。2026-11-11 登録済み。ログ `logs/disk_guard.log`）。止める: `launchctl bootout gui/$(id -u)/<Label>`。

@@ -1,0 +1,60 @@
+name: update-sounding
+
+# 実況エマグラム（ワイオミング大学の高層ゾンデ。気象庁の高層気象観測の実況）を、直近の観測時刻ぶん作って公開ブランチ(gh-pages)へ反映する。
+#  - 観測は 00UTC と 12UTC。配信元への公開までに数時間かかり、欠測もあるので、各観測時刻の後に数回試す（作成済みは取りにいかない）
+#  - 取得できなかった時刻・地点は飛ばし、次回の実行で取り直す（失敗にしない）
+#  - 公開するのは直近6観測時刻（約3日分）。画面は sounding.html（公開サイトの「実況エマグラム」）
+#  - 配信元への負荷を抑えるため、要求の間隔は2秒。1回の実行で新しく取りにいくのは未作成の分だけ
+on:
+  schedule:
+    # 00UTC の観測 → 03:40・05:40・07:40、12UTC の観測 → 15:40・17:40・19:40（UTC。実測: 00Z の観測は 06Z 過ぎにほぼ揃う）
+    - cron: "40 3,5,7,15,17,19 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "作成済みの図も作り直す（図の見た目を直したときなど）"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # 公開ブランチ(gh-pages)へのpush
+  pages: write      # Pagesの再ビルド要求
+
+concurrency:
+  group: update-sounding
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-sounding.txt
+
+      - name: 依存のインストール
+        run: pip install -r requirements-sounding.txt
+
+      - name: 日本語フォント（図の中の日本語表示用）
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-cjk
+
+      - name: 公開済みの実況エマグラムを取り込む（作成済みは取りにいかない）
+        run: python publish.py --pull --sounding
+
+      - name: 実況エマグラムの取得と作図
+        run: python update_sounding.py ${{ inputs.force && '--force' || '' }}
+
+      - name: 公開ブランチへ反映
+        run: python publish.py --sounding
+
+      - name: GitHub Pages の再ビルドを要求（push で自動的に走らない場合の保険）
+        run: gh api -X POST repos/${{ github.repository }}/pages/builds || true
+        env:
+          GH_TOKEN: ${{ github.token }}

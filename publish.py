@@ -4,14 +4,16 @@
 
 目的:
   - 画面（web/）だけを直したときは、画像を作らずに画面ファイルだけを差し替える（--web-only）
-  - モデルごとに別々に作図した結果を、他のモデルの画像に触れずに反映する（--model）
-  どちらも、公開ブランチの現在の内容を土台にして必要な部分だけを入れ替える。
+  - モデルごとに別々に作図した結果を、他のモデルの画像や画面ファイルに触れずに反映する（--model）
+  - 実況エマグラム（ワイオミング大学の高層ゾンデ。update_sounding.py が output/sounding に作る）を反映する（--sounding）
+  どれも、公開ブランチの現在の内容を土台にして必要な部分だけを入れ替える。
 
 公開ブランチの構成: index.html, app.js, style.css, board/ ...（= web/）と output/{model}/{初期値}/... と output/manifest.json
 
 使用例:
   python publish.py --web-only                 # 画面ファイルだけを反映（画像・manifestは触らない）
-  python publish.py --model gfs                # output/gfs の最新2初期値と画面ファイルを反映し、manifestを再生成
+  python publish.py --model gfs                # output/gfs の公開する初期値を反映し、manifestを再生成（画面ファイルには触れない。公開ブランチが無い初回だけ画面も反映）
+  python publish.py --sounding                 # output/sounding（実況エマグラムと manifest.json）を反映。--pull --sounding なら公開済みの分を手元へ取り込む
   python publish.py --model gfs --keep 3       # 残す初期値の数を変える（既定は nwp_data.MODELS の publish_keep と publish_hours）
   python publish.py --pull --model gfs         # 公開済みの output/gfs を手元の output/ へ取り込む（作成済み判定のため）
   python publish.py --web-only --dry-run       # 何をするかだけ表示（pushしない）
@@ -55,6 +57,7 @@ def parse_args():
     p.add_argument("--keep", type=int, default=None, help="公開する初期値の数（モデルごと。既定: nwp_data.MODELS の publish_keep）")
     p.add_argument("--remote", default="origin", help="公開先のリモート名（既定: origin）")
     p.add_argument("--branch", default="gh-pages", help="公開ブランチ（既定: gh-pages）")
+    p.add_argument("--sounding", action="store_true", help="実況エマグラム（output/sounding。update_sounding.py が作る）を公開サイトに反映する。--pull と一緒なら、公開済みの分を手元へ取り込む")
     p.add_argument("--custom", nargs="+", metavar="画像名", help="自由選択で作った画像（output/custom/ の PNG）を公開サイトに載せる（直近10件まで）")
     p.add_argument("--custom-remove", nargs="+", metavar="画像名", help="公開サイトに載せた自由選択の画像を外す")
     p.add_argument("--dry-run", action="store_true", help="pushせず、変更の有無だけ表示")
@@ -70,13 +73,13 @@ def parse_args():
         if nwp_data.MODELS[a.model].get("local_only"):
             # ローカル専用モデル（GSM）は公開しない。誤って指定しても拒否する（二重の防止）
             p.error(f"{a.model} はローカル専用モデルのため、公開ブランチへは反映できません")
-    if a.pull and not a.model:
-        p.error("--pull には --model が必要です")
+    if a.pull and not a.model and not a.sounding:
+        p.error("--pull には --model か --sounding が必要です")
     for n in (a.custom or []) + (a.custom_remove or []):
         if not re.fullmatch(r"[A-Za-z0-9_]+\.png", n):
             p.error(f"画像名が不正です: {n}")
-    if not a.pull and not a.web_only and not a.model and not a.custom and not a.custom_remove:
-        p.error("--model・--web-only・--custom・--custom-remove のどれかを指定してください")
+    if not a.pull and not a.web_only and not a.model and not a.custom and not a.custom_remove and not a.sounding:
+        p.error("--model・--web-only・--sounding・--custom・--custom-remove のどれかを指定してください")
     return a
 
 
@@ -136,6 +139,27 @@ def sync_web(wt: Path):
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src / rel, dst)
     (wt / ".nojekyll").write_text("")  # GitHub Pages でJekyll処理を無効化
+
+
+def sync_sounding(wt: Path):
+    """output/sounding（実況エマグラム。update_sounding.py が作る）を公開側の output/sounding へ入れ替える。他のフォルダには触れない。"""
+    src = ROOT / "output" / "sounding"
+    if not (src / "manifest.json").exists():
+        raise RuntimeError("output/sounding がありません（先に python update_sounding.py で作ってください）")
+    dst = wt / "output" / "sounding"
+    unlink_files(dst)
+    shutil.copytree(src, dst, ignore=shutil.ignore_patterns(".gitkeep", "*.tmp.png"), dirs_exist_ok=True)   # unlink_files は中のファイルだけを消す（dst は残る）
+    return sorted(d.name for d in dst.iterdir() if d.is_dir())
+
+
+def should_sync_web(a, tip):
+    """画面ファイル（web/）を公開ブランチへ反映するか。
+
+    画面の反映は deploy-web（--web-only）の仕事。モデルの公開（--model）や実況エマグラムの公開（--sounding）は、ジョブを起動した
+    時点の web/ を持っているため、画面を直して push した直後に、すでに走っていた古いジョブが終わると、古い画面で公開側を
+    上書きしてしまう（nwp_chart_web で 2026-11-12 に実際に発生した）。だから、これらでは画面に触れない。
+    ただし、公開ブランチがまだ無いとき（初回）は、画面も一緒に反映する。"""
+    return bool(a.web_only or (not a.model and not getattr(a, "sounding", False)) or tip is None)
 
 
 def newest_inits(model_dir: Path, keep: int, hours=None):
@@ -230,6 +254,7 @@ def regenerate_manifest(wt: Path):
 
 def publish(a):
     custom_mode = bool(a.custom or a.custom_remove)   # 自由選択の画像だけを反映する（画面ファイルやモデルの画像には触れない）
+    sounding_mode = bool(a.sounding) and not a.pull   # 実況エマグラムだけを反映する（output/sounding のみ。モデルの画像には触れない）
     published = []
     for attempt in range(1, 6):
         tip = fetch_tip(a.remote, a.branch)
@@ -239,13 +264,19 @@ def publish(a):
             if custom_mode:
                 published = sync_custom(wt, a.custom or [], a.custom_remove or [])
                 note = f"自由選択の断面図・エマグラム（公開 {len(published)} 件）"
+            elif sounding_mode:
+                times = sync_sounding(wt)
+                if tip is None:
+                    sync_web(wt)
+                note = f"実況エマグラム（{len(times)} 時刻）"
             else:
-                sync_web(wt)
+                if should_sync_web(a, tip):
+                    sync_web(wt)
                 note = "画面ファイルのみ"
-            if a.model and not a.web_only and not custom_mode:
+            if a.model and not a.web_only and not custom_mode and not sounding_mode:
                 inits = sync_model(wt, a.model, a.keep)
                 regenerate_manifest(wt)
-                note = f"{a.model} {', '.join(inits)} と画面ファイル"
+                note = f"{a.model} {', '.join(inits)}" + (" と画面ファイル" if tip is None else "")
             git("add", "-A", cwd=wt)
             if tip is not None and git("diff", "--cached", "--quiet", cwd=wt, check=False).returncode == 0:
                 print("公開ブランチに変更はありません（何も反映しません）")
@@ -275,21 +306,22 @@ def publish(a):
 
 
 def pull(a):
-    """公開済みの output/{model} を手元の output/ へ取り込む（作成済み判定・既存画像の再利用のため）。"""
+    """公開済みの output/{model}（--sounding なら output/sounding）を手元の output/ へ取り込む（作成済み判定・既存画像の再利用のため）。"""
     tip = fetch_tip(a.remote, a.branch)
     if tip is None:
         print("公開ブランチがまだありません（取り込むものがありません）")
         return 0
     wt = make_worktree(tip)
     try:
-        src = wt / "output" / a.model
+        name = "sounding" if a.sounding and not a.model else a.model
+        src = wt / "output" / name
         if not src.is_dir():
-            print(f"公開側に output/{a.model} がありません")
+            print(f"公開側に output/{name} がありません")
             return 0
-        dst = ROOT / "output" / a.model
+        dst = ROOT / "output" / name
         shutil.copytree(src, dst, dirs_exist_ok=True)
         n = sum(1 for _ in dst.rglob("*.png"))
-        print(f"公開済みの output/{a.model} を取り込みました（画像 {n} 枚）")
+        print(f"公開済みの output/{name} を取り込みました（画像 {n} 枚）")
     finally:
         remove_worktree(wt)
     return 0
