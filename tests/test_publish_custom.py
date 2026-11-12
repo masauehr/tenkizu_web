@@ -49,13 +49,14 @@ def test_publish_adds_to_front_and_copies_image(env):
     assert items[0]["url"] == f"output/custom/{b}" and items[0]["mk"] == "gfs" and items[0]["ft"] == 2
 
 
-def test_publish_keeps_only_newest_10_and_removes_dropped_images(env):
+def test_publish_keeps_only_newest_max_and_removes_dropped_images(env):
     src, wt = env
-    names = [make(src, i, 1000 - i) for i in range(12)]
-    for n in names:                                                       # 12回載せる → 古い2件は公開側から消える
+    n_max = publish.CUSTOM_MAX
+    names = [make(src, i, 2000 - i) for i in range(n_max + 2)]
+    for n in names:                                                       # 上限+2回載せる → 古い2件は公開側から消える
         publish.sync_custom(wt, [n], [])
     got = publish.sync_custom(wt, [], [])
-    assert len(got) == 10 and got[0] == names[11] and names[0] not in got and names[1] not in got
+    assert n_max == 20 and len(got) == n_max and got[0] == names[-1] and names[0] not in got and names[1] not in got
     pngs = sorted(p.name for p in (wt / "output" / "custom").glob("*.png"))
     assert pngs == sorted(got)                                            # 一覧と公開側の画像ファイルが一致
 

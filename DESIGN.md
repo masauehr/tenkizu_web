@@ -228,3 +228,4 @@ robots.txt の確認結果（上の節）を受けて、**取得元をワイオ�
 - ローカルサーバー（`api/custom/list` が返る）なら従来どおり。返らず `NWP_XSECTION_API` が設定されていれば REMOTE_MODE（nwp_chart_web の `goRemote` をコピー。共通部品にしない方針）。
 - 作図のみ。公開サイトに載せる操作（API の /api/publish・合言葉）は付けない。API の公開先は nwp_chart_web の gh-pages 固定のため。載せたい場合は API に公開先の指定を足す改修（案B）が要る。
 - API は GSM を扱えない／実況エマグラムは API 対象外なので、リモートでは選択肢から外す。API の CORS（ALLOWED_ORIGINS）は github.io のオリジンで判定する。
+- **追記（2026-11-12・案B）**: 公開サイトからの載せる・外すも追加。API に `site`（既定 nwp_chart_web・許可 tenkizu_web）を足し、`custom.js` が `site: "tenkizu_web"` と合言葉で `/api/publish`・`/api/unpublish` を呼ぶ。上限は API の `MAX_ITEMS` に合わせて 20 件。前の「作図のみ」の記述はこの追記で置き換わる。

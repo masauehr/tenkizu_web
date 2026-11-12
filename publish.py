@@ -187,7 +187,7 @@ def sync_model(wt: Path, model: str, keep: int):
     return inits
 
 
-CUSTOM_MAX = 10   # 公開サイトに載せる自由選択の画像の最大件数
+CUSTOM_MAX = 20   # 公開サイトに載せる自由選択の画像の最大件数（nwp_xsection_api の ghpub.MAX_ITEMS と同じにする）
 
 
 def sync_custom(wt: Path, add, remove):

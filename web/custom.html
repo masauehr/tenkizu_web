@@ -88,6 +88,10 @@
       <label>図 <select id="sMode"><option value="emagram">エマグラム</option><option value="pt">温位エマグラム</option></select></label>
       <span class="note">観測から半日〜1日ほどで公開されます。ふつうの観測は 00・12UTC。国外の地点・ワイオミング大学のデータは<a href="sounding.html">実況エマグラムのページ</a>（ローカルのみ・公開しない）で。</span>
     </div>
+    <div class="row" id="rowKey" hidden>
+      <label>合言葉（公開サイトに載せる・外すときだけ） <input type="password" id="pass" autocomplete="off" size="24" placeholder="渡された合言葉"></label>
+      <span class="note">この端末のブラウザにだけ保存します。作図には要りません。</span>
+    </div>
     <div class="row presets" id="presets"></div>
     <div class="row"><label>地図の範囲 <select id="ext"><option value="ea">東アジア（100〜180E・0〜70N）</option><option value="nh">北半球（0〜360E・−15〜90N）</option></select></label>
       <span class="note" id="mapHint"></span></div>
