@@ -13,7 +13,7 @@ import xsection as xs
 
 def test_defaults_keep_the_original_look():
     o = xs.normalize_opts()
-    assert o == {"shade": "div", "contours": ("theta", "ept", "wind"), "barbs": "front"}   # 指定が無ければ従来の見た目
+    assert o == {"shade": "div", "contours": ("theta", "ept", "wind"), "barbs": "front", "ptop": 100}   # 指定が無ければ従来の見た目（高度は全層）
 
 
 def test_normalize_orders_contours_and_validates():
@@ -75,3 +75,28 @@ def test_section_has_humidity_and_omega_masked_above_300(tmp_path):
     assert np.isnan(S["rh"][lev.index(200.0)]).all()                            # 300hPaより上は湿度が信頼できないので出さない
     assert np.isfinite(S["w"]).all()                                            # ωは全層で使う
     assert "rh" in S["fine"] and "w" in S["fine"]
+
+
+def test_parse_ptop_and_section_limits(tmp_path):
+    """高度設定（上端の気圧）: 未指定は100、選択肢以外は拒否。上端までの層だけで計算し、描画も通る。"""
+    assert xs.parse_ptop(None) == 100 and xs.parse_ptop("300") == 300
+    for bad in ("abc", "50", "1000"):
+        with pytest.raises(ValueError):
+            xs.parse_ptop(bad)
+    assert xs.options_text({"ptop": 300}).endswith("／上端300hPa") and xs.options_text({"ptop": 100}) == xs.options_text()
+    S = xs.compute_section(synthetic_F(), (45.0, 130.0), (25.0, 130.0), 500)
+    assert S["levels"].min() == 500
+    out = tmp_path / "xs.png"
+    xs.render_xsection(synthetic_F(), datetime(2026, 11, 10, 18), 12, (45.0, 130.0), (25.0, 130.0), str(out), model="TEST", opts=dict(ptop=300))
+    assert out.exists() and out.stat().st_size > 10_000
+
+
+def test_custom_validate_ptop():
+    q = dict(lat1="41", lon1="126", lat2="29", lon2="146", lat="35", lon="135")
+    for kind in ("xsection", "emagram"):
+        d = custom.validate(kind, "gfs", "2026111018", "0", q)
+        c = custom.validate(kind, "gfs", "2026111018", "0", {**q, "ptop": "300"})
+        assert "ptop" not in d and c["ptop"] == 300 and custom.out_path(d) != custom.out_path(c)   # 既定は p に入れない（画像名が従来と同じ）
+        assert "上端300hPa" in custom.describe(c)
+        with pytest.raises(custom.CustomError):
+            custom.validate(kind, "gfs", "2026111018", "0", {**q, "ptop": "50"})

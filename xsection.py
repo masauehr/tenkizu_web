@@ -25,7 +25,23 @@ SECTIONS = {
 SHADES = {"none": "なし", "div": "発散", "rh": "湿り（相対湿度）", "omega": "上昇流（ω）"}   # 色塗り。1つだけ選ぶ
 CONTOURS = {"theta": "温位", "ept": "相当温位", "wind": "断面平行風"}                          # 等値線。複数選べる
 BARBS = {"off": "なし", "back": "背景（薄い灰色）", "front": "前面（黒）"}                      # 風矢羽
-DEFAULT_OPTS = {"shade": "div", "contours": ("theta", "ept", "wind"), "barbs": "front"}
+# 高度設定: 表示する高度の範囲の上端の気圧[hPa]（小さいほど高い所まで）。既定は 100hPa（全層・従来の見た目）
+PTOPS = (100, 150, 200, 250, 300, 400, 500, 600, 700)
+DEFAULT_PTOP = 100
+DEFAULT_OPTS = {"shade": "div", "contours": ("theta", "ept", "wind"), "barbs": "front", "ptop": DEFAULT_PTOP}
+
+
+def parse_ptop(v):
+    """高度設定（上端の気圧[hPa]）を検証して整数で返す。未指定は既定（100）。選択肢以外は ValueError。"""
+    if v is None or v == "":
+        return DEFAULT_PTOP
+    try:
+        x = int(float(v))
+    except (TypeError, ValueError):
+        raise ValueError("高度（上端の気圧）が数値ではありません")
+    if x not in PTOPS:
+        raise ValueError("高度（上端の気圧）は " + "・".join(str(t) for t in PTOPS) + " hPa のどれかです")
+    return x
 
 
 def normalize_opts(opts=None):
@@ -36,6 +52,7 @@ def normalize_opts(opts=None):
         raise ValueError(f"色塗りの指定が不正です: {o['shade']}")
     if o["barbs"] not in BARBS:
         raise ValueError(f"風矢羽の指定が不正です: {o['barbs']}")
+    o["ptop"] = parse_ptop(o["ptop"])
     cs = [o["contours"]] if isinstance(o["contours"], str) else list(o["contours"])
     bad = [c for c in cs if c not in CONTOURS]
     if bad:
@@ -51,6 +68,8 @@ def options_text(opts=None):
     if o["shade"] != "none":
         parts.append(SHADES[o["shade"]])
     parts.append("風矢羽:" + BARBS[o["barbs"]] if o["barbs"] != "off" else "風矢羽なし")
+    if o["ptop"] != DEFAULT_PTOP:
+        parts.append(f"上端{o['ptop']}hPa")
     return "／".join(parts)
 
 
@@ -95,11 +114,13 @@ def _sample(arr, lats, lons, plat, plon):
     return map_coordinates(np.asarray(arr, dtype=float), [yi, xi], order=1, mode="nearest")
 
 
-def compute_section(F, start, end):
+def compute_section(F, start, end, ptop=DEFAULT_PTOP):
     """断面上の各量を返す。levels は下（大きい気圧）から上へ並べる。"""
     lats, lons = F["lats"], F["lons"]
     plat, plon = path_points(start, end)
-    levels = sorted(F["p"], reverse=True)
+    levels = sorted([lv for lv in F["p"] if lv >= ptop], reverse=True)       # 高度設定: 上端までの層だけで計算する（範囲内の解像度が上がる）
+    if len(levels) < 2:
+        raise ValueError(f"上端 {ptop}hPa までの気圧面が2層未満です")
     # 経路の向き（東・北成分の単位ベクトル）。断面平行・垂直の風の分解に使う
     dlat, dlon = end[0] - start[0], end[1] - start[1]
     ex, ey = dlon * np.cos(np.deg2rad(plat.mean())), dlat
@@ -158,7 +179,7 @@ def render_xsection(F, init, ft, start, end, outpath, model="", name="", quantiz
     opts: 表示要素（shade=色塗り・contours=等値線・barbs=風矢羽。normalize_opts を参照。省略すると従来の見た目）。"""
     import nwp_charts as nc
     o = normalize_opts(opts)
-    S = compute_section(F, start, end)
+    S = compute_section(F, start, end, o["ptop"])
     x = S["plat"] if S["ax"] == "lat" else S["plon"]
     lev = S["levels"]
     W, H = 9.5, 7.6

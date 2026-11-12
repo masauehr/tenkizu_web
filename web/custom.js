@@ -43,7 +43,8 @@
     $("rowOpt").hidden = kind() !== "xsection";                       // 表示要素の選択は断面だけ
     $("rowE").hidden = kind() !== "emagram";
     $("rowS").hidden = kind() !== "sounding";
-    $("rowModel").hidden = kind() === "sounding";                      // 実況は数値モデルではないので、モデル・初期値・予報時間は使わない
+    $("rowModel").hidden = kind() === "sounding";
+    $("rowPtop").hidden = kind() === "sounding";                      // 高度設定は数値モデルの図だけ                      // 実況は数値モデルではないので、モデル・初期値・予報時間は使わない
     buildPresets(); clickStep = 0; mapHint(); drawMap();
   }
   function buildInit() {
@@ -256,7 +257,7 @@
     if (REMOTE_MODE) return goRemote();
     const q = kind() === "sounding"
       ? new URLSearchParams({ kind: "sounding", wmo: $("sWmo").value, time: $("sDate").value.replace(/-/g, "") + $("sHour").value, mode: $("sMode").value })
-      : new URLSearchParams({ kind: kind(), model: $("model").value, init: $("init").value, ft: $("ft").value });
+      : new URLSearchParams({ kind: kind(), model: $("model").value, init: $("init").value, ft: $("ft").value, ptop: $("ptop").value });   // ptop: 高度設定（表示する高度の範囲の上端[hPa]）
     if (kind() !== "sounding") for (const id of kind() === "xsection" ? ["lat1", "lon1", "lat2", "lon2"] : ["lat", "lon"]) q.set(id, $(id).value);
     if (kind() === "xsection") {                                       // 断面の表示要素（色塗り・等値線・風矢羽）
       q.set("shade", document.querySelector("input[name=shade]:checked").value);
@@ -297,7 +298,7 @@
   }
   async function goRemote() {
     const k = kind();                                                           // xsection（断面図）／ emagram（エマグラム）
-    const q = new URLSearchParams({ model: $("model").value, init: $("init").value, ft: $("ft").value });
+    const q = new URLSearchParams({ model: $("model").value, init: $("init").value, ft: $("ft").value, ptop: $("ptop").value });   // ptop: 高度設定
     for (const id of k === "xsection" ? ["lat1", "lon1", "lat2", "lon2"] : ["lat", "lon"]) q.set(id, $(id).value);
     if (k === "xsection") {                                                     // 断面の表示要素（色塗り・等値線・風矢羽）
       q.set("shade", document.querySelector("input[name=shade]:checked").value);
