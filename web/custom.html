@@ -32,7 +32,7 @@
   <a href="sounding.html" title="観測（ラジオゾンデ）の実況から作ったエマグラム">実況エマグラム（観測）</a>
 </header>
 <main>
-  <p class="note">ローカルサーバーだけで使えます。公開サイトでは固定の断面（130E・140E）と主要5地点のエマグラムだけを載せています。
+  <p class="note" id="intro">ローカルサーバーで使えます（公開サイトでは、サーバー（Render）で断面図・エマグラムを作れます）。公開サイトには固定の断面（130E・140E）と主要5地点のエマグラム、作者が公開した図を載せています。
     データが手元に無い初期値・予報時間は、その場で取得するので<b>1分ほど</b>かかります（ECMWF・GFS。取得したデータは data/ に残ります）。GSM は手元にあるものだけ使えます。<br>「実況エマグラム」は数値モデルではなく気象庁の高層気象観測（16地点・任意の観測日時）で、数秒で作れます。</p>
   <div id="form">
     <div class="row">
@@ -84,6 +84,7 @@
   <div id="hist"></div>
   <div id="result"></div>
 </main>
+<script src="config.js"></script>
 <script src="custom.js"></script>
 </body>
 </html>

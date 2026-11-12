@@ -100,7 +100,7 @@
     try {
       const j = await (await fetch("api/status", { cache: "no-store" })).json();
       if (typeof j.running !== "boolean") return;
-    } catch (e) { return; }
+    } catch (e) { if (window.NWP_XSECTION_API) $("lnkCustom").hidden = false; return; }   // 公開サイトでも、Render の API で作れる（config.js）
     $("localBox").hidden = false; $("lnkCustom").hidden = false;
     const dl = $("lStations");
     for (const s of (M && M.stations) || []) dl.appendChild(Object.assign(document.createElement("option"), { value: s.id, label: s.name }));

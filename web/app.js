@@ -625,7 +625,9 @@
     let j;
     try { j = await (await fetch(API + "status", { cache: "no-store" })).json(); } catch (e) {
       // 更新APIが無い（公開用の静的サイト）場合はボタンごと隠す
-      $("btnUpdate").hidden = true; $("updateMsg").hidden = true; return;
+      $("btnUpdate").hidden = true; $("updateMsg").hidden = true;
+      if (window.NWP_XSECTION_API) $("lnkCustom").hidden = false;       // 公開サイトでも、Render の API で作れる（config.js）
+      return;
     }
     $("lnkCustom").hidden = false;
     if (!S.local) { S.local = true; if (S.fig) buildFigSelects(); }   // ローカルサーバーと分かったら、右の図の選択肢に自由選択を加える                                   // 更新APIがある＝ローカルサーバー。自由選択ページへのリンクを出す

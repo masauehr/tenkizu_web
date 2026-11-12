@@ -223,3 +223,8 @@ robots.txt の確認結果（上の節）を受けて、**取得元をワイオ�
 - `/api/custom?kind=sounding&wmo=..&time=YYYYMMDDHH&mode=emagram|pt`（気象庁のみ）。画像は `output/custom/sounding_<時刻>_<地点>_<種類>.png` ＋同名 .json（kind=sounding・mk=""・ft=0）。
 - 数値モデルの `/api/custom`（断面・エマグラム）と同じ一覧・ディスク整理・公開操作に乗せるため、保存先を `output/sounding_custom/` ではなく output/custom/ にした。`/api/sounding`（ワイオミング含む・公開しない）は従来どおり残す。
 - 画面の表示名は `ft` を出さない（観測は予報時間を持たない）。
+
+## 公開サイトからの作図（2026-11-12・案A）
+- ローカルサーバー（`api/custom/list` が返る）なら従来どおり。返らず `NWP_XSECTION_API` が設定されていれば REMOTE_MODE（nwp_chart_web の `goRemote` をコピー。共通部品にしない方針）。
+- 作図のみ。公開サイトに載せる操作（API の /api/publish・合言葉）は付けない。API の公開先は nwp_chart_web の gh-pages 固定のため。載せたい場合は API に公開先の指定を足す改修（案B）が要る。
+- API は GSM を扱えない／実況エマグラムは API 対象外なので、リモートでは選択肢から外す。API の CORS（ALLOWED_ORIGINS）は github.io のオリジンで判定する。

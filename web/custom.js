@@ -12,6 +12,11 @@
                ["47600", "輪島", 37.39, 136.90], ["47646", "館野", 36.06, 140.13], ["47678", "八丈島", 33.10, 139.79], ["47971", "父島", 27.09, 142.19],
                ["47991", "南鳥島", 24.29, 153.98], ["47741", "松江", 35.45, 133.07], ["47778", "潮岬", 33.45, 135.76], ["47807", "福岡", 33.58, 130.38],
                ["47827", "鹿児島", 31.56, 130.55], ["47909", "名瀬", 28.38, 129.50], ["47918", "石垣島", 24.34, 124.16], ["47945", "南大東島", 25.83, 131.23]];
+  // 公開サイトでも、Render の断面図API（nwp_xsection_api）が config.js に設定されていれば、断面図・エマグラムを作れる（作図のみ。公開サイトに載せる操作は無い）。
+  // 作図は認証なし（回数制限あり）。ローカルサーバーで開いたときは従来どおり（/api/custom）。
+  let LOCAL = true;
+  const REMOTE = String(window.NWP_XSECTION_API || "").replace(/\/+$/, "");
+  let REMOTE_MODE = false;
   let manifest = null;
   const kind = () => document.querySelector("input[name=kind]:checked").value;
 
@@ -142,6 +147,16 @@
   for (const id of ["lat1", "lon1", "lat2", "lon2", "lat", "lon"]) $(id).addEventListener("input", drawMap);
   fetch("coast.json").then((r) => r.json()).then((j) => { coast = j.lines; drawMap(); }).catch(() => drawMap());
 
+  const REMOTE_MODELS = ["ecmwf", "gfs", "aifs"];                        // Render の API が作れるモデル
+  async function detectLocal() {
+    try { const j = await (await fetch("api/custom/list", { cache: "no-store" })).json(); LOCAL = Array.isArray(j.items); } catch (e) { LOCAL = false; }
+    if (!LOCAL && REMOTE) { REMOTE_MODE = true; setupRemote(); }
+    else if (!LOCAL) {                                                  // API が未設定の公開サイト: 作者が公開した図を見るだけ
+      $("form").hidden = true; $("disk").hidden = true;
+      $("intro").textContent = "作者が公開した断面図・エマグラムです（公開サイトでは新しく作ることはできません）。下のボタンで選んでください。";
+    }
+  }
+
   async function boot() {
     try { manifest = await (await fetch(OUT + "manifest.json", { cache: "no-store" })).json(); } catch (e) {
       $("msg").textContent = "manifest.json を読めません。先に作図してください"; $("msg").className = "err"; return;
@@ -150,7 +165,11 @@
     $("sWmo").value = "47918";
     const d0 = new Date(Date.now() - 24 * 3600 * 1000);                // 既定: 前日（公開まで半日〜1日かかるため）
     $("sDate").value = `${d0.getUTCFullYear()}-${String(d0.getUTCMonth() + 1).padStart(2, "0")}-${String(d0.getUTCDate()).padStart(2, "0")}`;
-    for (const [k, v] of Object.entries(manifest.models || {})) $("model").add(new Option(v.label || k, k));
+    await detectLocal();                                               // ローカルか、公開サイト（Render の API で作る）か
+    for (const [k, v] of Object.entries(manifest.models || {})) {
+      if (REMOTE_MODE && !REMOTE_MODELS.includes(k)) continue;          // Render の API は GSM を扱えない
+      $("model").add(new Option(v.label || k, k));
+    }
     $("model").onchange = buildInit;
     buildInit();
     for (const r of document.querySelectorAll("input[name=kind]")) r.onchange = applyKind;
@@ -174,12 +193,14 @@
   // （ブラウザの保存には頼らない。別のブラウザでも、サイトデータを消しても同じ。通常版の「別の図を並べる」の右の図でも選べる）
   const MAX_HIST = 10;
   async function getHist() {
-    try { const j = await (await fetch("api/custom/list", { cache: "no-store" })).json(); return Array.isArray(j.items) ? j.items : []; }
+    const url = LOCAL ? "api/custom/list" : "output/custom/list.json";
+    try { const j = await (await fetch(url, { cache: "no-store" })).json(); return Array.isArray(j.items) ? j.items : []; }
     catch (e) { return []; }
   }
   const histText = (c) => `${c.label}（${c.model} ${c.initText}${c.kind === "sounding" ? "" : ` ＋${c.ft}h`}）` + (c.published ? "【公開中】" : "");
   // 結果の画像と「平面図と並べて見る」のリンクを出す
   function showResult(c) {
+    if (!LOCAL) { $("result").innerHTML = `<img alt="${esc(histText(c))}" src="${esc(c.url)}">`; return; }   // 公開サイト: 公開された図を見るだけ
     const base = c.url.split("/").pop();
     const link = c.mk ? `./#model=${c.mk}&init=${c.ik}&region=japan&chart=fax57&ft=${c.ft}&fig=1&region2=custom&chart2=${encodeURIComponent(base)}`
                       : `./#region=japan&chart=fax57&fig=1&region2=custom&chart2=${encodeURIComponent(base)}`;
@@ -220,7 +241,7 @@
     box.innerHTML = "";
     if (!h.length) return;
     const t = document.createElement("div"); t.className = "note";
-    t.textContent = `最近の作図（直近${MAX_HIST}件・保存した画像ファイルから表示。通常版の「別の図を並べる」の右の図でも選べます）`;
+    t.textContent = LOCAL ? `最近の作図（直近${MAX_HIST}件・保存した画像ファイルから表示。通常版の「別の図を並べる」の右の図でも選べます）` : "公開されている断面図・エマグラム";
     box.appendChild(t);
     for (const c of h) {
       const b = document.createElement("button");
@@ -230,9 +251,9 @@
       box.appendChild(b);
     }
   }
-  renderHist();
 
   $("go").onclick = async () => {
+    if (REMOTE_MODE) return goRemote();
     const q = kind() === "sounding"
       ? new URLSearchParams({ kind: "sounding", wmo: $("sWmo").value, time: $("sDate").value.replace(/-/g, "") + $("sHour").value, mode: $("sMode").value })
       : new URLSearchParams({ kind: kind(), model: $("model").value, init: $("init").value, ft: $("ft").value });
@@ -258,5 +279,73 @@
     showDisk();
   };
 
-  boot();
+  // ---------- 公開サイトから Render の断面図APIで作る（REMOTE_MODE。nwp_chart_web と同じ仕組み。作図のみ）
+  const esc = (t) => String(t == null ? "" : t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  function setupRemote() {
+    $("disk").hidden = true;
+    document.querySelector("input[name=kind][value=sounding]").closest("label").hidden = true;      // 実況エマグラムはローカルのみ
+    $("intro").innerHTML = "断面図・エマグラムを、サーバー（Render）でその場で作れます。<b>合言葉は要りません</b>（1時間に8回まで）。" +
+      "初回や久しぶりのときはサーバーの起動に<b>1分ほど</b>、データの取得を含めて<b>1〜2分</b>かかります。" +
+      "作った図は画面で見るだけで、公開サイトには載りません（載せる操作はローカルで行います）。下の一覧は、作者が公開している図です。";
+  }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  async function remoteJson(path, opt) {
+    const r = await fetch(REMOTE + path, opt);
+    let j = {};
+    try { j = await r.json(); } catch (e) { /* JSON でない応答 */ }
+    return { r, j };
+  }
+  async function goRemote() {
+    const k = kind();                                                           // xsection（断面図）／ emagram（エマグラム）
+    const q = new URLSearchParams({ model: $("model").value, init: $("init").value, ft: $("ft").value });
+    for (const id of k === "xsection" ? ["lat1", "lon1", "lat2", "lon2"] : ["lat", "lon"]) q.set(id, $(id).value);
+    if (k === "xsection") {                                                     // 断面の表示要素（色塗り・等値線・風矢羽）
+      q.set("shade", document.querySelector("input[name=shade]:checked").value);
+      q.set("contours", [...document.querySelectorAll("input[name=cont]:checked")].map((e) => e.value).join(","));
+      q.set("barbs", document.querySelector("input[name=barbs]:checked").value);
+    }
+    $("go").disabled = true;
+    const fail = (t) => { $("msg").textContent = t; $("msg").className = "err"; $("go").disabled = false; };
+    const say = (t) => { $("msg").className = ""; $("msg").textContent = t; };
+    const t0 = Date.now(), secs = () => Math.round((Date.now() - t0) / 1000);
+    // サーバーがまだ起動していない（無料枠は止まっていると起動に1分ほどかかる）間は、接続できない・502/503/504（本文が JSON でない）が返る。失敗にせず待つ
+    const starting = (res) => !res.r.ok && !res.j.error && [502, 503, 504].includes(res.r.status);
+    const call = async (path, opt) => {
+      for (;;) {
+        let res = null;
+        try { res = await remoteJson(path, opt); } catch (e) { /* 接続できない＝起動中 */ }
+        if (res && !starting(res)) return res;
+        if (secs() > 240) throw new Error("timeout");
+        say(`サーバーを起動しています…${secs()}秒（止まっていると1分ほどかかります。そのままお待ちください）`);
+        await sleep(4000);
+      }
+    };
+    say("サーバーに接続しています…（久しぶりのときは起動に1分ほどかかります）");
+    try {
+      let { r, j } = await call("/api/" + k + "?" + q);
+      if (!r.ok && r.status !== 202) return fail(j.error || `作図できません（HTTP ${r.status}）`);
+      let restarts = 0, jid = j.job;       // ジョブIDは別に持つ（状態確認の応答を j に代入すると、IDが消える）
+      while (j.state === "queued" || j.state === "running") {
+        say((j.state === "queued" && j.position ? `順番待ちです（前に${j.position}件）` : "作図中です（データ取得が入ると1〜2分かかります）") + `…${secs()}秒`);
+        await sleep(3000);
+        if (secs() > 12 * 60) return fail("時間がかかりすぎています。しばらくしてからもう一度試してください");
+        ({ r, j } = await call("/api/job/" + encodeURIComponent(jid)));
+        if (r.status === 404) {                                                // サーバーが再起動して記録が消えた。同じ条件の再送は安全
+          if (++restarts > 3) return fail("サーバーが何度も再起動しています。しばらくしてからもう一度試してください");
+          say(`サーバーが再起動したようです。作図をやり直しています…（${restarts}回目）`);
+          ({ r, j } = await call("/api/" + k + "?" + q));
+          if (!r.ok && r.status !== 202) return fail(j.error || `作図できません（HTTP ${r.status}）`);
+          jid = j.job;
+          continue;
+        }
+        if (!r.ok) return fail(j.error || `状態を確認できません（HTTP ${r.status}）`);
+      }
+      if (j.state === "error") return fail(j.error || "作図できません");
+      say("完了");
+      $("result").innerHTML = `<img alt="${esc(j.label)}" src="${esc(REMOTE + j.url)}">` + (j.legal ? `<p class="note">${esc(j.legal)}</p>` : "");
+    } catch (e) { return fail("サーバーに接続できません（しばらくしてからもう一度試してください）"); }
+    $("go").disabled = false;
+  }
+
+  boot().then(renderHist);              // 公開サイトかどうかが分かってから、一覧を出す
 })();
