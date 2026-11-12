@@ -1,17 +1,22 @@
 #!/usr/bin/env python
 # coding: utf-8
-"""実況の高層ゾンデ（ワイオミング大学）から、エマグラム・温位エマグラムを作る。
+"""実況の高層気象観測（ラジオゾンデ）から、エマグラム・温位エマグラムを作る。
+
+取得元は2つ（既定は気象庁）:
+  - jma（既定）: 気象庁「過去の気象データ検索（高層）」の指定気圧面の観測データ（地上＋標準の気圧面 約25層。気温・相対湿度・風・高度）。
+      https://www.data.jma.go.jp/obd/stats/etrn/upper/view/hourly_usp.php?year=&month=&day=&hour=&atm=&point=<WMO番号>&view=
+      「時」は日本時間（00UTC＝9時・12UTC＝21時）。robots.txt なし。公共データ利用規約（第1.0版）: 出典と、加工した旨を記載する。
+      観測から公開までは半日〜1日ほどかかる（2026-11-12 に確認。今朝の00UTCは夕方になっても未公開で、前夜の12UTCは公開済み）。
+  - wyoming: ワイオミング大学（weather.uwyo.edu/wsgi/sounding。約100層の詳しい観測・国外の地点も可）。**配信元の robots.txt が /wsgi を
+      全ロボットに Disallow している**ので、自動取得（定期実行）には使わない。ローカルで人が操作する1回ずつの取得だけ（server.py の /api/sounding?source=wyoming）。
+      siphon が使っていた旧い URL（weather.arcc.uwyo.edu/cgi-bin/sounding）は 2026 年に 404。応答は HTML の <PRE> の固定幅の表。
 
 tenkizu の emagram.py（CLI・siphon 使用）の描画を移植して調整したもの（共通部品化しない）。
-siphon が使っていた旧い URL（weather.arcc.uwyo.edu/cgi-bin/sounding）は 2026 年に 404 になったため、
-現在の https://weather.uwyo.edu/wsgi/sounding を直接読む。応答は HTML の <PRE> の中の固定幅の表
-（列: PRES HGHT TEMP DWPT RELH MIXR DRCT SPED THTA THTE THTV。各7桁。風速 SPED は m/s）。
+  - 取得: fetch(dt, wmo, source=...)。その時刻・地点のデータが無ければ None（欠測・まだ公開前・未収録）。ネットワークの異常は SoundingError
+  - 描画: render(d, dt, wmo, mode, outpath, source=...)。mode は emagram（気温・露点・風・持ち上げ気塊・CAPE/CIN・ホドグラフ）か pt（温位エマグラム）
+  - 公開用の一括作成は update_sounding.py（気象庁）。ローカルで任意の地点・時刻は render_custom()（server.py の /api/sounding）
 
-  - 取得: fetch(dt, wmo)。その時刻・地点のデータが無ければ None（欠測・まだ公開前・未収録）。ネットワークの異常は SoundingError
-  - 描画: render(d, dt, wmo, mode, outpath)。mode は emagram（気温・露点・風・持ち上げ気塊・CAPE/CIN・ホドグラフ）か pt（温位エマグラム）
-  - 公開用の一括作成は update_sounding.py。ローカルで任意の地点・時刻は render_custom()（server.py の /api/sounding）
-
-データ: University of Wyoming, Department of Atmospheric Science（weather.uwyo.edu）。出典を図とページに表示する。
+出典・加工の表示を図とページに出す（気象庁: 出典と加工した旨。ワイオミング: University of Wyoming）。
 アクセスは控えめに（間隔を空け、作成済みは取りにいかない）。利用条件は変わり得るので、公開を続ける間は配信元で確認すること。
 """
 import json
@@ -35,14 +40,22 @@ HEADERS = {"User-Agent": "tenkizu_web/1.0 (+https://github.com/masauehr/tenkizu_
 MODES = ("emagram", "pt")
 MODE_LABEL = {"emagram": "エマグラム", "pt": "温位エマグラム"}
 
-# 取得できる日本の高層気象観測所（WMO番号: (名前, 地域)）。那覇（47936）・台湾（花蓮 46699・台北 46692）は
-# ワイオミング大学に無い（2026-11-12 に確認。404）。
+SOURCES = ("jma", "wyoming")
+JMA_URL = "https://www.data.jma.go.jp/obd/stats/etrn/upper/view/hourly_usp.php"
+JMA_PAGE = "https://www.data.jma.go.jp/obd/stats/etrn/upper/index.php"
+
+# 気象庁の高層気象観測所（WMO番号: (名前, 地域)）。那覇（47936）は観測を終了した地点。昭和基地（89532）は含めない。
 STATIONS = {
     "47401": ("稚内", "北海道"),
+    "47412": ("札幌", "北海道"),
+    "47418": ("釧路", "北海道"),
     "47582": ("秋田", "東北"),
     "47600": ("輪島", "北陸"),
     "47646": ("館野", "関東"),
     "47678": ("八丈島", "関東"),
+    "47971": ("父島", "小笠原"),
+    "47991": ("南鳥島", "小笠原"),
+    "47741": ("松江", "中国"),
     "47778": ("潮岬", "近畿"),
     "47807": ("福岡", "九州"),
     "47827": ("鹿児島", "九州"),
@@ -51,8 +64,12 @@ STATIONS = {
     "47945": ("南大東島", "南西諸島"),
 }
 
-LEGAL = ("高層気象観測（ラジオゾンデ）のデータ: University of Wyoming, Department of Atmospheric Science "
-         "（weather.uwyo.edu）。観測値をそのまま図にしたもので、気象庁の公式な図ではありません。")
+LEGAL = ("出典：気象庁ホームページ「過去の気象データ検索（高層）」の指定気圧面の観測データ（" + JMA_PAGE + "）を加工して作成。"
+         "観測値（地上と標準の気圧面）から、本サイトがエマグラム・温位エマグラムを作図したもので、気象庁の公式な図ではありません。"
+         "標準の気圧面だけなので、ワイオミング大学の詳しい観測（約100層）より粗い図です。")
+LEGAL_WYOMING = ("高層気象観測（ラジオゾンデ）のデータ: University of Wyoming, Department of Atmospheric Science（weather.uwyo.edu）。"
+                 "観測値をそのまま図にしたもので、気象庁の公式な図ではありません。")
+FOOTER = {"jma": "出典：気象庁ホームページ（高層気象観測）を加工して作成", "wyoming": "Data: University of Wyoming (weather.uwyo.edu)"}
 
 JP_FONTS = ["Hiragino Sans", "Noto Sans CJK JP", "IPAGothic", "IPAexGothic", "Arial Unicode MS", "DejaVu Sans"]
 matplotlib.rcParams["font.family"] = JP_FONTS
@@ -60,6 +77,10 @@ matplotlib.rcParams["font.family"] = JP_FONTS
 
 class SoundingError(RuntimeError):
     """取得・読み取りの失敗（ネットワークの異常・形式の変化・データ不足）。メッセージは画面にそのまま出せる。"""
+
+
+class SoundingMissing(SoundingError):
+    """表はあるが、観測値がすべて欠測（///）。取得の失敗ではなく、その時刻の欠測として扱う（fetch は None を返す）。"""
 
 
 # ------------------------------------------------------------------ 観測時刻
@@ -103,8 +124,85 @@ def parse_sounding(html):
     return d
 
 
-def fetch(dt, wmo, session=None, retries=2, wait=3.0):
-    """指定時刻・地点の観測を取得して parse_sounding の結果を返す。データが無ければ None。ネットワークの異常は SoundingError。"""
+def _dewpoint(t_c, rh):
+    """気温[℃]と相対湿度[%]から露点[℃]（Magnus の式。湿度の欠測は NaN）。"""
+    rh = np.clip(np.asarray(rh, dtype=float), 1.0, 100.0)
+    t = np.asarray(t_c, dtype=float)
+    a, b = 17.62, 243.12
+    g = np.log(rh / 100.0) + a * t / (b + t)
+    return b * g / (a - g)
+
+
+def _num(cell):
+    """気象庁の表のセル→数値。欠測（///）・空欄は NaN。"""
+    try:
+        return float(cell)
+    except ValueError:
+        return np.nan
+
+
+def parse_jma(html):
+    """気象庁の指定気圧面の観測データ（HTML）を読む。返り値は parse_sounding と同じ形（Td は気温と相対湿度から計算）。形式が違えば SoundingError。"""
+    rows = []
+    for tr in re.findall(r"(?is)<tr[^>]*>(.*?)</tr>", html):
+        cells = [re.sub(r"\s+", " ", re.sub(r"(?s)<[^>]+>", "", c)).strip() for c in re.findall(r"(?is)<t[dh][^>]*>(.*?)</t[dh]>", tr)]
+        if len(cells) == 6 and re.fullmatch(r"-?\d+(\.\d+)?", cells[0]):        # 地上と指定気圧面の数値の行: 気圧・高度・気温・相対湿度・風速・風向
+            rows.append([_num(c) for c in cells])
+    if len(rows) < 10:
+        raise SoundingError(f"観測値の行が少なすぎます（{len(rows)}行。気象庁のページの形式が変わった可能性があります）")
+    a = np.array(rows, dtype=float)
+    text = re.sub(r"\s+", " ", re.sub(r"(?s)<[^>]+>", " ", html))
+    name = re.search(r"【([^】]+?)\s*\d{4}年", text)
+    T, rh = a[:, 2], a[:, 3]
+    if not np.isfinite(T).any() and not np.isfinite(a[:, 4]).any():           # 表はあるが、気温も風もすべて ///（その時刻・地点は欠測。八丈島・南大東島で実際にあった）
+        raise SoundingMissing("観測値がすべて欠測です")
+    d = dict(p=a[:, 0], h=a[:, 1], T=T, Td=_dewpoint(T, rh), drct=a[:, 5], sped=a[:, 4],
+             name=name.group(1).strip() if name else "", lat=None, lon=None)
+    ok = np.isfinite(d["p"]) & np.isfinite(T)
+    if ok.sum() < 10 or not np.nanmax(d["p"][ok]) >= 800:
+        raise SoundingError("気温の観測値が足りません（地上付近のデータが無い）")
+    return d
+
+
+def _fetch_jma(dt, wmo, session=None, retries=2, wait=3.0):
+    s = session or requests
+    jst = dt + timedelta(hours=9)                        # 気象庁の「時」は日本時間（00UTC＝9時・12UTC＝21時）
+    last = None
+    for k in range(retries + 1):
+        try:
+            r = s.get(JMA_URL, params={"year": jst.year, "month": jst.month, "day": jst.day, "hour": jst.hour, "atm": "", "point": wmo, "view": ""},
+                      headers=HEADERS, timeout=45)
+            r.encoding = "utf-8"
+        except requests.RequestException as e:
+            last = f"接続できません: {e.__class__.__name__}"
+        else:
+            if r.status_code == 200:
+                if "表示できるデータがありません" in r.text:
+                    return None                          # まだ公開前・欠測（気象庁は観測から半日〜1日ほどかかる）
+                if "ページを表示することが出来ませんでした" in r.text:
+                    raise SoundingError(f"気象庁のページが読めません（地点番号 {wmo} か日時の指定が不正）")
+                try:
+                    return parse_jma(r.text)
+                except SoundingMissing:
+                    return None                          # 表はあるが全部欠測（///）
+            last = f"HTTP {r.status_code}"
+        if k < retries:
+            time.sleep(wait * (k + 1))
+    raise SoundingError(f"気象庁から取得できません（{last}）")
+
+
+def fetch(dt, wmo, session=None, retries=2, wait=3.0, source="jma"):
+    """指定時刻・地点の観測を取得して、読み取り結果（p・h・T・Td・drct・sped・name）を返す。データが無ければ None。ネットワークの異常は SoundingError。
+    source: jma（既定）／ wyoming（配信元の robots.txt が自動取得を禁じているので、人が操作する1回ずつの取得だけに使う）。"""
+    if source == "jma":
+        return _fetch_jma(dt, wmo, session, retries, wait)
+    if source == "wyoming":
+        return _fetch_wyoming(dt, wmo, session, retries, wait)
+    raise ValueError(f"source は {SOURCES} のどちらかです")
+
+
+def _fetch_wyoming(dt, wmo, session=None, retries=2, wait=3.0):
+    """ワイオミング大学から取得（旧 fetch）。データが無ければ None。"""
     s = session or requests
     last = None
     for k in range(retries + 1):
@@ -279,8 +377,8 @@ def station_label(wmo, d=None):
     return f"{nm}（{wmo}）" if nm else str(wmo)
 
 
-def render(d, dt, wmo, mode, outpath):
-    """観測 d（parse_sounding の結果）から図を1枚作って outpath に保存する。mode: emagram / pt。"""
+def render(d, dt, wmo, mode, outpath, source="jma"):
+    """観測 d（parse_jma / parse_sounding の結果）から図を1枚作って outpath に保存する。mode: emagram / pt。source: 出典の表示に使う。"""
     if mode not in MODES:
         raise ValueError(f"mode は {MODES} のどちらかです")
     prof = _profile(d)
@@ -289,7 +387,7 @@ def render(d, dt, wmo, mode, outpath):
     fig = plt.figure(figsize=(7, 12))
     try:
         skew = (_draw_emagram if mode == "emagram" else _draw_pt)(fig, prof, dt, station_label(wmo, d))
-        skew.ax.text(0.0, -0.075, "Data: University of Wyoming (weather.uwyo.edu)", transform=skew.ax.transAxes,
+        skew.ax.text(0.0, -0.075, FOOTER.get(source, FOOTER["jma"]), transform=skew.ax.transAxes,
                      fontsize=7, color="#555555", va="top", ha="left")
         outpath = Path(outpath)
         outpath.parent.mkdir(parents=True, exist_ok=True)
@@ -313,7 +411,7 @@ def _manifest_body(root):
                 sts.setdefault(m.group(1), []).append(m.group(2))
         if sts:
             times.append({"time": td.name, "stations": {k: sorted(v, key=MODES.index) for k, v in sorted(sts.items())}})
-    return {"legal": LEGAL, "stations": [{"id": k, "name": v[0], "region": v[1]} for k, v in STATIONS.items()], "times": times}
+    return {"source": "jma", "legal": LEGAL, "stations": [{"id": k, "name": v[0], "region": v[1]} for k, v in STATIONS.items()], "times": times}
 
 
 def write_manifest(root=SOUNDING_DIR):
@@ -346,10 +444,14 @@ def prune(root, keep):
 
 
 # ------------------------------------------------------------------ ローカルで任意の地点・時刻（server.py の /api/sounding）
-def validate_request(wmo, time_s, mode, now=None):
+def validate_request(wmo, time_s, mode, now=None, source="jma"):
     """入力を検証して (wmo, dt, mode) を返す。不正なら ValueError（メッセージは画面に出せる）。"""
+    if source not in SOURCES:
+        raise ValueError("データ元は jma（気象庁）か wyoming（ワイオミング大学）です")
     if not re.fullmatch(r"\d{5}", wmo or ""):
         raise ValueError("地点は WMO 地点番号（5桁の数字。例: 47918）で指定してください")
+    if source == "jma" and wmo not in STATIONS:
+        raise ValueError("気象庁のデータは、気象庁の高層気象観測所（" + "・".join(f"{v[0]}{k}" for k, v in STATIONS.items()) + "）だけです。国外の地点はワイオミング大学を選んでください")
     if not re.fullmatch(r"\d{10}", time_s or ""):
         raise ValueError("観測時刻は YYYYMMDDHH（UTC）で指定してください")
     try:
@@ -365,13 +467,14 @@ def validate_request(wmo, time_s, mode, now=None):
     return wmo, dt, mode
 
 
-def render_custom(wmo, dt, mode, out_dir=CUSTOM_DIR, session=None):
-    """任意の地点・時刻の図を作る（作成済みならそれを返す）。データが無ければ SoundingError。"""
-    out = Path(out_dir) / f"{dt:%Y%m%d%H}_{wmo}_{mode}.png"
+def render_custom(wmo, dt, mode, out_dir=CUSTOM_DIR, session=None, source="jma"):
+    """任意の地点・時刻の図を作る（作成済みならそれを返す）。データが無ければ SoundingError。ワイオミング大学の図は別の名前（_uwyo）で保存する。"""
+    out = Path(out_dir) / f"{dt:%Y%m%d%H}_{wmo}_{mode}{'_uwyo' if source == 'wyoming' else ''}.png"
     if out.exists():
         return out
-    d = fetch(dt, wmo, session)
+    d = fetch(dt, wmo, session, source=source)
     if d is None:
-        raise SoundingError(f"{wmo} の {dt:%Y-%m-%d %H}UTC の観測データがありません"
-                            "（欠測、まだ公開前、またはワイオミング大学に無い地点です）")
-    return render(d, dt, wmo, mode, out)
+        hint = ("（欠測か、まだ公開前です。気象庁は観測から半日〜1日ほどかかります）" if source == "jma"
+                else "（欠測、まだ公開前、またはワイオミング大学に無い地点です）")
+        raise SoundingError(f"{wmo} の {dt:%Y-%m-%d %H}UTC の観測データがありません{hint}")
+    return render(d, dt, wmo, mode, out, source=source)

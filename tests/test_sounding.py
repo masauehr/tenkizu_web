@@ -14,7 +14,8 @@ import publish  # noqa: E402
 import sounding as snd  # noqa: E402
 import update_sounding  # noqa: E402
 
-HTML = (Path(__file__).resolve().parent / "data" / "uwyo_47918_2026111112.html").read_text(encoding="utf-8")
+HTML = (Path(__file__).resolve().parent / "data" / "uwyo_47918_2026111112.html").read_text(encoding="utf-8")        # ワイオミング大学の実際の応答
+JMA_HTML = (Path(__file__).resolve().parent / "data" / "jma_47918_2026111121.html").read_text(encoding="utf-8")    # 気象庁の実際の応答（石垣島 2026-11-11 21時JST＝12UTC）
 DT = datetime(2026, 11, 11, 12, tzinfo=timezone.utc)
 
 
@@ -64,15 +65,18 @@ class FakeSession:
 def test_fetch_paths(monkeypatch):
     monkeypatch.setattr(snd.time, "sleep", lambda s: None)
     s = FakeSession((200, HTML))
-    assert snd.fetch(DT, "47918", s)["p"][0] == 1021.0
+    assert snd.fetch(DT, "47918", s, source="wyoming")["p"][0] == 1021.0
     assert s.calls[0] == {"datetime": "2026-11-11 12:00:00", "id": "47918", "src": "UNKNOWN", "type": "TEXT:LIST"}
-    assert snd.fetch(DT, "47936", FakeSession((404, "Unable to retrieve the data for 47936 at 2026-11-11 12:00:00."))) is None   # 欠測・未収録
-    assert snd.fetch(DT, "47936", FakeSession((400, "Unable to retrieve the data for 47936"))) is None
-    assert snd.fetch(DT, "47918", FakeSession((503, "busy"), (200, HTML)))["p"][0] == 1021.0                                   # 一時的な異常は取り直す
+    W = {"source": "wyoming"}
+    assert snd.fetch(DT, "47936", FakeSession((404, "Unable to retrieve the data for 47936 at 2026-11-11 12:00:00.")), **W) is None   # 欠測・未収録
+    assert snd.fetch(DT, "47936", FakeSession((400, "Unable to retrieve the data for 47936")), **W) is None
+    assert snd.fetch(DT, "47918", FakeSession((503, "busy"), (200, HTML)), **W)["p"][0] == 1021.0                                   # 一時的な異常は取り直す
     with pytest.raises(snd.SoundingError):
-        snd.fetch(DT, "47918", FakeSession((503, "x"), (503, "x"), (503, "x")))
+        snd.fetch(DT, "47918", FakeSession((503, "x"), (503, "x"), (503, "x")), **W)
     with pytest.raises(snd.SoundingError):
-        snd.fetch(DT, "47918", FakeSession(snd.requests.ConnectionError("x"), snd.requests.ConnectionError("x"), snd.requests.ConnectionError("x")))
+        snd.fetch(DT, "47918", FakeSession(snd.requests.ConnectionError("x"), snd.requests.ConnectionError("x"), snd.requests.ConnectionError("x")), **W)
+    with pytest.raises(ValueError):
+        snd.fetch(DT, "47918", FakeSession(), source="noaa")
 
 
 @pytest.mark.parametrize("mode", ["emagram", "pt"])
@@ -106,10 +110,16 @@ def test_manifest_and_prune(tmp_path):
     m = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     assert [x["time"] for x in m["times"]] == ["2026111200", "2026111112", "2026111100"]                   # 新しい順
     assert m["times"][0]["stations"] == {"47646": ["emagram"], "47918": ["emagram", "pt"]}
-    assert {s["id"] for s in m["stations"]} == set(snd.STATIONS) and "Wyoming" in m["legal"]
+    assert {s["id"] for s in m["stations"]} == set(snd.STATIONS) and m["source"] == "jma"
+    assert "気象庁" in m["legal"] and "加工" in m["legal"]                          # 出典と、加工した旨（公共データ利用規約）
     assert snd.write_manifest(tmp_path) is False                                    # 中身が同じなら更新しない（無駄な公開コミットを避ける）
     assert snd.prune(tmp_path, 2) == ["2026111100"] and not (tmp_path / "2026111100").exists()
     assert snd.write_manifest(tmp_path) is True and len(json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))["times"]) == 2
+
+
+def _touch_render(d, dt, wmo, m, p):
+    Path(p).parent.mkdir(parents=True, exist_ok=True)
+    Path(p).write_bytes(b"x")
 
 
 def test_update_run_skips_existing_and_tolerates_missing(tmp_path):
@@ -118,7 +128,7 @@ def test_update_run_skips_existing_and_tolerates_missing(tmp_path):
     done.mkdir(parents=True)
     for m in snd.MODES:
         (done / f"47918_{m}.png").write_bytes(b"x")                                 # 作成済み
-    fetched, rendered = [], []
+    fetched = []
 
     def fake_fetch(dt, wmo, session=None):
         fetched.append((f"{dt:%m%d%H}", wmo))
@@ -128,14 +138,37 @@ def test_update_run_skips_existing_and_tolerates_missing(tmp_path):
             raise snd.SoundingError("HTTP 503")
         return {"p": [1]}
 
-    res = update_sounding.run([t1, t2], ["47918", "47646", "47678", "47401"], tmp_path, delay=0, fetch=fake_fetch,
-                              render=lambda d, dt, wmo, m, p: rendered.append((wmo, m)) or Path(p).parent.mkdir(parents=True, exist_ok=True) or Path(p).write_bytes(b"x"))
+    res = update_sounding.run([t1, t2], ["47918", "47401", "47646", "47678"], tmp_path, delay=0, fetch=fake_fetch, render=_touch_render)
     assert ("111200", "47918") not in fetched                                      # 作成済みは取りにいかない
     assert ("111112", "47918") in fetched
-    assert res["skipped"] == 1 and res["made"] == 3                                # 47401（2時刻）と 47918（作成済みでない方の1時刻）
+    assert res["skipped"] == 1 and res["made"] == 3 and res["not_yet"] == []        # t1: 47401。t2: 47918・47401（47646 は欠測・47678 はエラー）
     assert len(res["missing"]) == 2 and len(res["errors"]) == 2
     forced = update_sounding.run([t1], ["47918"], tmp_path, force=True, delay=0, fetch=fake_fetch, render=lambda *a: None)
     assert forced["made"] == 1 and forced["skipped"] == 0                          # --force は作成済みも作り直す
+
+
+def test_update_run_skips_unpublished_time_with_two_probes(tmp_path):
+    """まだ公開されていない時刻は、先頭の2地点だけ試して見分け、残りの地点は取りにいかない（無駄な要求を避ける）。"""
+    ts = snd.obs_times(datetime(2026, 11, 12, 6, 20, tzinfo=timezone.utc), count=2)    # 11/12 00Z（未公開）と 11/11 12Z（公開済み）
+    calls = []
+
+    def fake_fetch(dt, wmo, session=None):
+        calls.append((f"{dt:%m%d%H}", wmo))
+        return None if dt.day == 12 else {"p": [1]}
+
+    res = update_sounding.run(ts, list(snd.STATIONS), tmp_path, delay=0, fetch=fake_fetch, render=_touch_render)
+    unpublished = [c for c in calls if c[0] == "111200"]
+    assert len(unpublished) == 2 and res["not_yet"] == ["2026-11-12 00Z"]          # 未公開の時刻は2回だけ（16地点を取りにいかない）
+    assert res["made"] == len(snd.STATIONS) and len([c for c in calls if c[0] == "111112"]) == len(snd.STATIONS)   # 公開済みの時刻は全地点（先頭の1地点は再利用）
+    assert res["missing"] == [] and res["errors"] == []
+
+
+def test_update_run_continues_when_only_the_first_probe_is_missing(tmp_path):
+    """先頭の地点だけ欠測でも、その時刻を「公開前」とは決めつけない（2地点目があれば全地点を処理）。"""
+    t = snd.obs_times(datetime(2026, 11, 12, 6, 20, tzinfo=timezone.utc), count=1)
+    first = list(snd.STATIONS)[0]
+    res = update_sounding.run(t, list(snd.STATIONS), tmp_path, delay=0, fetch=lambda dt, w, s=None: None if w == first else {"p": [1]}, render=_touch_render)
+    assert res["not_yet"] == [] and res["made"] == len(snd.STATIONS) - 1 and len(res["missing"]) == 1
 
 
 def test_update_run_continues_after_render_error(tmp_path):
@@ -144,6 +177,15 @@ def test_update_run_continues_after_render_error(tmp_path):
         raise RuntimeError("boom")
     res = update_sounding.run(t, ["47918", "47646"], tmp_path, delay=0, fetch=lambda *a: {"p": [1]}, render=bad_render)
     assert res["made"] == 0 and len(res["errors"]) == 2                            # 1枚の描画の失敗で全体を止めない
+
+
+def test_validate_request_by_source():
+    now = datetime(2026, 11, 12, 6, 0, tzinfo=timezone.utc)
+    with pytest.raises(ValueError, match="気象庁"):
+        snd.validate_request("12345", "2026111112", "pt", now)                      # 気象庁は観測所の一覧にある地点だけ
+    assert snd.validate_request("12345", "2026111112", "pt", now, source="wyoming")[0] == "12345"       # ワイオミングは国外も（5桁なら）
+    with pytest.raises(ValueError):
+        snd.validate_request("47918", "2026111112", "pt", now, source="noaa")
 
 
 def test_validate_request():
@@ -158,13 +200,18 @@ def test_validate_request():
 
 def test_render_custom_uses_cache_and_reports_missing(tmp_path, monkeypatch):
     calls = []
-    monkeypatch.setattr(snd, "fetch", lambda dt, wmo, session=None: calls.append(wmo) or snd.parse_sounding(HTML))
+    monkeypatch.setattr(snd, "fetch", lambda dt, wmo, session=None, source="jma": calls.append((wmo, source)) or snd.parse_jma(JMA_HTML))
     out = snd.render_custom("47918", DT, "emagram", tmp_path)
     assert out.name == "2026111112_47918_emagram.png" and out.exists()
-    assert snd.render_custom("47918", DT, "emagram", tmp_path) == out and calls == ["47918"]       # 2回目は作り直さない
+    assert snd.render_custom("47918", DT, "emagram", tmp_path) == out and calls == [("47918", "jma")]      # 2回目は作り直さない
+    monkeypatch.setattr(snd, "fetch", lambda dt, wmo, session=None, source="jma": snd.parse_sounding(HTML))
+    uw = snd.render_custom("47918", DT, "emagram", tmp_path, source="wyoming")
+    assert uw.name == "2026111112_47918_emagram_uwyo.png" and uw != out            # ワイオミング大学の図は別の名前（混ざらない）
     monkeypatch.setattr(snd, "fetch", lambda *a, **k: None)
-    with pytest.raises(snd.SoundingError, match="観測データがありません"):
-        snd.render_custom("47936", DT, "pt", tmp_path)
+    with pytest.raises(snd.SoundingError, match="観測データがありません.*半日〜1日"):
+        snd.render_custom("47646", DT, "pt", tmp_path)
+    with pytest.raises(snd.SoundingError, match="観測データがありません.*ワイオミング"):
+        snd.render_custom("47936", DT, "pt", tmp_path, source="wyoming")
 
 
 def test_publish_sync_sounding_touches_only_output_sounding(tmp_path, monkeypatch):
@@ -211,6 +258,62 @@ def test_publish_args(monkeypatch):
         publish.parse_args()                                                       # --pull だけはだめ（モデルか --sounding が要る）
 
 
-def test_stations_are_japanese_upper_air_sites_with_valid_ids():
-    assert len(snd.STATIONS) == 11 and all(len(k) == 5 and k.isdigit() for k in snd.STATIONS)
-    assert "47936" not in snd.STATIONS and "46692" not in snd.STATIONS            # 那覇・台北はワイオミング大学に無い（取れない地点を毎回取りにいかない）
+def test_stations_are_jma_upper_air_sites():
+    assert len(snd.STATIONS) == 16 and all(len(k) == 5 and k.isdigit() for k in snd.STATIONS)
+    assert snd.STATIONS["47418"][0] == "釧路" and snd.STATIONS["47412"][0] == "札幌"       # 釧路は 47418（47417 ではない。確認済み）
+    assert "47936" not in snd.STATIONS                                              # 那覇は観測を終了した地点
+
+
+# ------------------------------------------------------------------ 気象庁（既定の取得元）
+def test_parse_jma_real_response():
+    d = snd.parse_jma(JMA_HTML)
+    assert d["name"] == "石垣島"
+    assert d["p"][0] == 1020.9 and d["h"][0] == 8.0 and d["T"][0] == 24.1 and d["sped"][0] == 4.6 and d["drct"][0] == 60.0     # 地上
+    lv = list(d["p"])
+    assert lv[1:5] == [1000.0, 925.0, 900.0, 850.0] and d["T"][lv.index(500.0)] == -5.2 and d["h"][lv.index(500.0)] == 5909.0   # 指定気圧面
+    assert d["sped"][lv.index(300.0)] == 21.0 and d["drct"][lv.index(300.0)] == 287.0
+    # 相対湿度から露点を計算（地上: 24.1℃・59% → 約15.6℃）。250hPa より上は湿度が無い（///）ので NaN
+    assert d["Td"][0] == pytest.approx(15.6, abs=0.2) and np.isnan(d["Td"][lv.index(250.0)]) and np.isfinite(d["Td"][lv.index(300.0)])
+    assert np.isnan(d["T"][lv.index(5.0)])                                          # 5hPa は全部 ///
+
+
+def test_parse_jma_rejects_unexpected_format():
+    for html in ("<html>no table</html>", "<table><tr><td>気圧</td><td>高度</td></tr></table>"):
+        with pytest.raises(snd.SoundingError):
+            snd.parse_jma(html)
+
+
+def test_fetch_jma_paths_and_japan_time(monkeypatch):
+    monkeypatch.setattr(snd.time, "sleep", lambda s: None)
+    s = FakeSession((200, JMA_HTML))
+    assert snd.fetch(DT, "47918", s)["name"] == "石垣島"                              # 既定は気象庁
+    # 気象庁の「時」は日本時間: 12UTC＝21時、00UTC＝9時、18UTC＝翌日3時
+    assert s.calls[0] == {"year": 2026, "month": 11, "day": 11, "hour": 21, "atm": "", "point": "47918", "view": ""}
+    s0 = FakeSession((200, "表示できるデータがありません"))
+    assert snd.fetch(datetime(2026, 11, 12, 0, tzinfo=timezone.utc), "47918", s0) is None
+    assert s0.calls[0]["day"] == 12 and s0.calls[0]["hour"] == 9
+    s18 = FakeSession((200, "表示できるデータがありません"))
+    snd.fetch(datetime(2026, 11, 11, 18, tzinfo=timezone.utc), "47918", s18)
+    assert s18.calls[0]["day"] == 12 and s18.calls[0]["hour"] == 3
+    assert snd.fetch(DT, "47918", FakeSession((503, "busy"), (200, JMA_HTML)))["name"] == "石垣島"       # 一時的な異常は取り直す
+    with pytest.raises(snd.SoundingError, match="地点番号"):
+        snd.fetch(DT, "47417", FakeSession((200, "指定気圧面の観測データ ページを表示することが出来ませんでした。")))       # 地点番号が違うとき（公開前とは区別する）
+    with pytest.raises(snd.SoundingError):
+        snd.fetch(DT, "47918", FakeSession((503, "x"), (503, "x"), (503, "x")))
+
+
+@pytest.mark.parametrize("mode", ["emagram", "pt"])
+def test_render_jma_shows_citation_and_processing(tmp_path, mode):
+    out = snd.render(snd.parse_jma(JMA_HTML), DT, "47918", mode, tmp_path / f"{mode}.png", source="jma")
+    assert out.exists() and out.stat().st_size > 15_000
+    assert "加工" in snd.FOOTER["jma"] and "気象庁" in snd.FOOTER["jma"] and "Wyoming" in snd.FOOTER["wyoming"]
+
+
+def test_jma_table_with_all_missing_values_is_a_missing_observation_not_an_error():
+    """表はあるのに観測値がすべて ///（八丈島・南大東島で実際にあった）は、取得の失敗ではなく欠測（None）。"""
+    rows = "".join(f"<tr><td>{p}</td><td>0</td><td>///</td><td>///</td><td>///</td><td>///</td></tr>" for p in (1000, 925, 900, 850, 800, 700, 600, 500, 400, 300, 250, 200))
+    html = "<table><tr><td>地上</td></tr><tr><td>///</td><td>0</td><td>///</td><td>///</td><td>///</td><td>///</td></tr>" + rows + "</table>"
+    with pytest.raises(snd.SoundingMissing):
+        snd.parse_jma(html)
+    assert snd.fetch(DT, "47678", FakeSession((200, html))) is None
+    assert issubclass(snd.SoundingMissing, snd.SoundingError)

@@ -107,9 +107,9 @@
     const d = new Date(Date.now() - 24 * 3600 * 1000);
     $("lDate").value = `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
     $("lGo").onclick = async () => {
-      const wmo = $("lWmo").value.trim(), date = $("lDate").value, hour = $("lHour").value, mode = $("lMode").value;
+      const wmo = $("lWmo").value.trim(), date = $("lDate").value, hour = $("lHour").value, mode = $("lMode").value, source = $("lSource").value;
       if (!date) { $("lMsg").textContent = "日付を入れてください"; return; }
-      const q = new URLSearchParams({ wmo, time: date.replace(/-/g, "") + hour, mode });
+      const q = new URLSearchParams({ wmo, time: date.replace(/-/g, "") + hour, mode, source });
       $("lGo").disabled = true; $("lMsg").textContent = "取得・作図中…（数秒）";
       try {
         const r = await fetch("api/sounding?" + q), j = await r.json();
@@ -120,7 +120,7 @@
           $("img").onerror = () => msg("画像を読めません", true);
           $("img").src = j.url + "?t=" + Date.now();
           $("view").hidden = false;
-          $("caption").textContent = `ローカルで作った図｜${wmo}｜${MODE_LABEL[mode]}｜観測 ${fmtTime(date.replace(/-/g, "") + hour)}`;
+          $("caption").textContent = `ローカルで作った図（${source === "jma" ? "気象庁" : "ワイオミング大学"}）｜${wmo}｜${MODE_LABEL[mode]}｜観測 ${fmtTime(date.replace(/-/g, "") + hour)}`;
         }
       } catch (e) { $("lMsg").textContent = "サーバーに接続できません"; }
       $("lGo").disabled = false;

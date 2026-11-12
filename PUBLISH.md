@@ -11,13 +11,13 @@
 - `web/custom.html`（自由選択）は静的サイトでは動かない（`/api/custom` が無い）。ローカルサーバーでだけ使う。
 
 ## 実況エマグラム（update-sounding・2026-11-12〜）
-> **【2026-11-12 確認】配信元（weather.uwyo.edu）の `robots.txt` は、すべてのロボットに対して `/wsgi`（取得先 `/wsgi/sounding`）と `/cgi-bin`・`/upperair/imgs` を Disallow（アクセスしないでほしい）としている**。利用規約のページは見つからず、あるのは「データについての質問は Larry Oolman（ldoolman@uwyo.edu）へ」という記載だけ。そのため **定期実行 `update-sounding` は無効化している**（`gh workflow disable`。まだ1回も動いていない）。再開は、配信元の了解を得るか、別の取得先に切り替えてから（`gh workflow enable update-sounding.yml`）。
-
-- **何を公開するか**: 気象庁の高層気象観測（ラジオゾンデ）の実況エマグラム。ワイオミング大学のデータ（`https://weather.uwyo.edu/wsgi/sounding`）。日本の11地点×直近6観測時刻（00/12UTC）×2種類（エマグラム・温位エマグラム）。gh-pages の `output/sounding/<観測時刻>/<WMO番号>_<図>.png` と `output/sounding/manifest.json`。約10MB。
-- **更新**: `.github/workflows/update-sounding.yml`（UTC 3・5・7・15・17・19時の :40。00/12UTC の観測の後に数回試す。GitHub の `schedule` なので遅れることがある。観測は急ぎではない）。手順は `publish.py --pull --sounding`（公開済みを取り込む）→ `update_sounding.py`（未作成だけ取得・作図）→ `publish.py --sounding`（`output/sounding` だけを反映）。`workflow_dispatch` で手動実行・`force` で作り直せる。
-- **取れない時刻・地点**は飛ばして次回に回す（観測の欠測・公開の遅れがあるため）。全部失敗したときだけ、ワークフローが失敗する。
+- **何を公開するか**: 気象庁の高層気象観測（ラジオゾンデ）の観測値から作った実況エマグラム。取得元は気象庁「過去の気象データ検索（高層）」の指定気圧面（`https://www.data.jma.go.jp/obd/stats/etrn/upper/view/hourly_usp.php`）。気象庁の16観測所×直近6観測時刻（00/12UTC）×2種類（エマグラム・温位エマグラム）。gh-pages の `output/sounding/<観測時刻>/<WMO番号>_<図>.png` と `output/sounding/manifest.json`。約14MB。
+- **出典・加工の表示**: 公共データ利用規約（第1.0版）に従い、出典と加工した旨を図の下端・ページ・manifest に表示している（外さない）。
+- **取得元の経緯**: 最初はワイオミング大学（`weather.uwyo.edu/wsgi/sounding`）で作ったが、**配信元の `robots.txt` が `/wsgi` を全ロボットに Disallow していた**ので、自動取得には使わず、気象庁に切り替えた（2026-11-12）。ワイオミングはローカルの手動操作（1回ずつ）だけ。
+- **更新**: `.github/workflows/update-sounding.yml`（UTC 2・8・14・20時の :40＝6時間おき。GitHub の `schedule` なので遅れることがある）。手順は `publish.py --pull --sounding`（公開済みを取り込む）→ `update_sounding.py`（未作成だけ取得・作図）→ `publish.py --sounding`（`output/sounding` だけを反映）。`workflow_dispatch` で手動実行・`force` で作り直せる。**現在は無効化中**（ユーザーの確認後に `gh workflow enable update-sounding.yml`）。
+- **気象庁の公開は観測から半日〜1日ほど遅れる**。まだ公開されていない時刻は、先頭の2地点だけ試して見分け、残りの地点は取りにいかない。取れない時刻・地点は飛ばして次回に回す（失敗にしない）。全部失敗したときだけ、ワークフローが失敗する。
 - **配信元への負荷**: 要求の間隔は2秒。作成済みは取りにいかない。地点・時刻を増やすときは、要求の数を見積もる。
-- **初回**: 画面（`web/sounding.html`）と `update-sounding.yml` を push したら、Actions から `update-sounding` を手動実行して、最初の画像を公開する。
+- **初回**: 画面（`web/sounding.html`）と `update-sounding.yml` を push したら、Actions から `update-sounding` を有効化し、手動実行して最初の画像を公開する。
 - **ローカルで任意に作った図**（`output/sounding_custom/`）は公開しない（`build_site.py` も除外）。
 - **依存**は `requirements-sounding.txt`（軽い。cartopy・pygrib は要らない）。日本語フォントは CI で `fonts-noto-cjk` を入れる。
 
