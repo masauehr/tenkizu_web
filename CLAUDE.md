@@ -17,7 +17,7 @@ tenkizu の CLI 作図（天気図・断面図・エマグラム）を Web で�
 - `data/`（取得 GRIB2）・`output/`・`_site/`・`logs/` は git 除外。
 
 ## 守ること
-- **GSM は公開しない**（`nwp_data.MODELS["gsm"]` の `local_only`。`publish.py`・`build_site.py`・`sync_public.py` で除外している。外さない）。`output/custom/`（自由選択の画像）も公開しない。
+- **GSM は公開しない**（`nwp_data.MODELS["gsm"]` の `local_only`。`publish.py`・`build_site.py`・`sync_public.py` で除外している。外さない）。自動の公開では `output/custom/` は載せない（`build_site.py` が除外）。**ただし例外（2026-11-12 ユーザー決定）**: 自由選択（断面図・エマグラム）で作った GSM の図は、画面で2回押して手動で載せたものに限り公開してよい（定期更新・自動の公開は引き続き GSM を除外。配信元の再配布条件は未確認のまま、ユーザーが認めた）。
 - 経度は 0〜360 に正規化して扱う（`nwp_data._read`）。ECMWF のオープンデータは −180〜180 度で来ることがある。
 - 北半球図（`render_polar`）の範囲は投影座標で指定する（cartopy 0.26 対応）。
 - 画用紙版の保存キーは `tenkizuBoard.v1`。**同じドメイン（masauehr.github.io）の nwp_chart_web と localStorage を共有する**ため、キー名を共通にしない。

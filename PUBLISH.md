@@ -5,7 +5,7 @@
 
 ## 公開するもの・しないもの
 - 公開: ECMWF・GFS（`nwp_data.MODELS` の `publish_hours` / `publish_keep`）。地域は日本周辺・北半球・鉛直断面（固定: 130E・140E）・エマグラム（固定5地点）。
-- 公開しない: GSM（`local_only`）、`output/custom/`（自由選択で作った画像。`build_site.py` が除外）、`output/sounding_custom/`（ローカルで任意に作った実況）。`publish.py` は GSM の指定を拒否する。
+- 公開しない: GSM（`local_only`）、`output/custom/`（自由選択で作った画像。`build_site.py` が除外）、`output/sounding_custom/`（ローカルで任意に作った実況）。`publish.py` は GSM の指定を拒否する。**ただし例外（2026-11-12 ユーザー決定）**: 自由選択（断面図・エマグラム）で作った GSM の図は、画面で2回押して手動で載せたものに限り公開してよい（定期更新・自動の公開は引き続き GSM を除外。配信元の再配布条件は未確認のまま、ユーザーが認めた）。
 - 公開（追加）: 実況エマグラム（`output/sounding`。下の節）。
 - **画面ファイルの反映は `deploy-web` だけ**。モデルの公開（`publish.py --model`）・実況の公開（`--sounding`）は画面に触れない（古い `web/` で動いていたジョブが、画面を直した直後に終わって古い画面で上書きする競合があったため。公開ブランチが無い初回だけ例外）。画面を直して push したら、公開サイト（gh-pages）の該当ファイルが新しいか確認する。
 - `web/custom.html`（自由選択）は静的サイトでは動かない（`/api/custom` が無い）。ローカルサーバーでだけ使う。
