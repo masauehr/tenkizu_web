@@ -14,18 +14,18 @@ import publish  # noqa: E402
 import sounding as snd  # noqa: E402
 import update_sounding  # noqa: E402
 
-HTML = (Path(__file__).resolve().parent / "data" / "uwyo_47918_2026111112.html").read_text(encoding="utf-8")        # ワイオミング大学の実際の応答
+HTML = (Path(__file__).resolve().parent / "data" / "uwyo_synthetic.html").read_text(encoding="utf-8")        # ワイオミング大学の応答と同じ形式の合成データ（実在の観測ではない。ワイオミングのデータは公開しない方針）
 JMA_HTML = (Path(__file__).resolve().parent / "data" / "jma_47918_2026111121.html").read_text(encoding="utf-8")    # 気象庁の実際の応答（石垣島 2026-11-11 21時JST＝12UTC）
 DT = datetime(2026, 11, 11, 12, tzinfo=timezone.utc)
 
 
-def test_parse_real_response():
+def test_parse_wyoming_format():
     d = snd.parse_sounding(HTML)
-    assert d["name"] == "ISHIGAKIJIMA, JAPAN" and d["lat"] == 24.33 and d["lon"] == 124.16
-    assert len(d["p"]) == 104 and d["p"][0] == 1021.0 and d["h"][0] == 7.0 and d["T"][0] == 24.0 and d["Td"][0] == 15.0
-    assert np.isfinite(d["T"]).all() and np.isfinite(d["Td"]).sum() == 45          # 上層は露点が空欄（NaN）
-    assert d["sped"][0] == 4.6 and d["drct"][0] == 60.0                            # 風速は m/s
-    assert d["p"][-1] == 16.3 and d["T"][-1] == -53.1
+    assert d["name"] == "TESTVILLE, JAPAN (SYNTHETIC)" and d["lat"] == 30.0 and d["lon"] == 130.0
+    assert len(d["p"]) == 26 and d["p"][0] == 1013.0 and d["h"][0] == 10.0 and d["T"][0] == 24.9 and d["Td"][0] == 17.9
+    assert np.isfinite(d["T"]).sum() == 24 and np.isfinite(d["Td"]).sum() == 18    # 上層は露点が空欄（NaN）・風だけの行が2本（気温も NaN）
+    assert d["sped"][0] == 3.0 and d["drct"][0] == 80.0                            # 風速は m/s
+    assert d["p"][-1] == 50.0 and d["T"][-1] == -54.8
 
 
 @pytest.mark.parametrize("html", ["<html>no table</html>", "<pre>   PRES   HGHT\n 1000.0     50   20.0</pre>"])
@@ -65,12 +65,12 @@ class FakeSession:
 def test_fetch_paths(monkeypatch):
     monkeypatch.setattr(snd.time, "sleep", lambda s: None)
     s = FakeSession((200, HTML))
-    assert snd.fetch(DT, "47918", s, source="wyoming")["p"][0] == 1021.0
+    assert snd.fetch(DT, "47918", s, source="wyoming")["p"][0] == 1013.0
     assert s.calls[0] == {"datetime": "2026-11-11 12:00:00", "id": "47918", "src": "UNKNOWN", "type": "TEXT:LIST"}
     W = {"source": "wyoming"}
     assert snd.fetch(DT, "47936", FakeSession((404, "Unable to retrieve the data for 47936 at 2026-11-11 12:00:00.")), **W) is None   # 欠測・未収録
     assert snd.fetch(DT, "47936", FakeSession((400, "Unable to retrieve the data for 47936")), **W) is None
-    assert snd.fetch(DT, "47918", FakeSession((503, "busy"), (200, HTML)), **W)["p"][0] == 1021.0                                   # 一時的な異常は取り直す
+    assert snd.fetch(DT, "47918", FakeSession((503, "busy"), (200, HTML)), **W)["p"][0] == 1013.0                                   # 一時的な異常は取り直す
     with pytest.raises(snd.SoundingError):
         snd.fetch(DT, "47918", FakeSession((503, "x"), (503, "x"), (503, "x")), **W)
     with pytest.raises(snd.SoundingError):
