@@ -132,9 +132,14 @@ class Handler(SimpleHTTPRequestHandler):
             return
         q = {k: v[0] for k, v in parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "").items()}
         try:
-            p = custom.validate(q.get("kind"), q.get("model"), q.get("init"), q.get("ft"), q)
-            with _custom_lock:
-                out = custom.render(p)
+            if q.get("kind") == custom.SOUNDING:       # 実況エマグラム（気象庁の観測）
+                p = custom.validate_sounding(q)
+                with _custom_lock:
+                    out = custom.render_sounding(p)
+            else:
+                p = custom.validate(q.get("kind"), q.get("model"), q.get("init"), q.get("ft"), q)
+                with _custom_lock:
+                    out = custom.render(p)
         except custom.CustomError as e:
             self._json(400, {"error": str(e)})
             return

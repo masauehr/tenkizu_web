@@ -23,6 +23,7 @@ import nwp_data
 ROOT = Path(__file__).resolve().parent
 CUSTOM_DIR = ROOT / "output" / "custom"
 KINDS = ("xsection", "emagram")
+SOUNDING = "sounding"  # 実況エマグラム（気象庁の観測）。数値モデルではないので KINDS とは別に扱う（validate_sounding / render_sounding）
 HIST_MAX = 10          # 「最近の作図」に出す件数
 
 
@@ -171,6 +172,55 @@ def list_recent(limit=HIST_MAX):
         items.append(meta)
     items.sort(key=lambda x: x["ts"], reverse=True)
     return items[:limit]
+
+
+def validate_sounding(q):
+    """実況エマグラム（気象庁の観測）の入力を検証する。wmo=地点番号・time=YYYYMMDDHH(UTC)・mode=emagram|pt。
+    ワイオミング大学は取らない（自由選択の画像は公開できるため。ワイオミングは公開しない方針）。"""
+    import sounding
+    try:
+        wmo, dt, mode = sounding.validate_request(q.get("wmo"), q.get("time"), q.get("mode") or "emagram", source="jma")
+    except ValueError as e:
+        raise CustomError(str(e))
+    return dict(kind=SOUNDING, wmo=wmo, time=f"{dt:%Y%m%d%H}", mode=mode)
+
+
+def sounding_path(p):
+    return CUSTOM_DIR / f"sounding_{p['time']}_{p['wmo']}_{p['mode']}.png"
+
+
+def write_sounding_meta(out, p):
+    import sounding
+    t = p["time"]
+    meta = dict(kind=SOUNDING, mk="", ik=t, ft=0, model="気象庁の観測", initText=init_text(t),
+                label=f"実況エマグラム {sounding.station_label(p['wmo'], None)}・{sounding.MODE_LABEL.get(p['mode'], p['mode'])}",
+                params=dict(wmo=p["wmo"], mode=p["mode"]), created=time.time())
+    meta_path(out).write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+
+
+def render_sounding(p):
+    """実況エマグラムを output/custom/ に作って PNG のパスを返す（同じ条件が既にあればそれを返す）。
+    これで「最近の作図」「別の図を並べる」の右の図・公開サイトに載せる操作が、断面図・エマグラムと同じに使える。"""
+    import sounding
+    out = sounding_path(p)
+    if out.exists():
+        now = time.time()
+        os.utime(out, (now, now))
+        if not meta_path(out).exists():
+            write_sounding_meta(out, p)
+        return out
+    CUSTOM_DIR.mkdir(parents=True, exist_ok=True)
+    dt = nwp_data.parse_init(p["time"])
+    try:
+        d = sounding.fetch(dt, p["wmo"], source="jma")
+        if d is None:
+            raise CustomError(f"{p['wmo']} の {init_text(p['time'])} の観測データがありません（欠測か、まだ公開前です。気象庁は観測から半日〜1日ほどかかります）")
+        sounding.render(d, dt, p["wmo"], p["mode"], out, source="jma")
+    except sounding.SoundingError as e:
+        raise CustomError(str(e))
+    write_sounding_meta(out, p)
+    disk_guard.prune_group("custom")
+    return out
 
 
 def render(p):

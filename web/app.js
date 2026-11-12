@@ -113,7 +113,7 @@
   const regions2Avail = () => [...regionsAvail(), ...(sndCache ? ["sounding"] : []), ...(S.local || customList().length ? ["custom"] : [])];
   const charts2Avail = (region) => (region === "custom" ? (customList().length ? customList().map(customBase) : ["last"])
     : region === "sounding" ? sndKeys(S.t2) : chartsAvail(region));
-  const customText = (c) => `${c.label}（${c.model} ${c.initText} ＋${c.ft}h）`;
+  const customText = (c) => `${c.label}（${c.model} ${c.initText}${c.kind === "sounding" ? "" : ` ＋${c.ft}h`}）`;
   const chartLabel2 = (region, chart) => {
     if (region === "sounding") return sndLabel(chart);
     if (region === "custom") { const c = customFind(chart); return c ? customText(c) : "自由選択（まだ作図していません）"; }
@@ -403,7 +403,7 @@
   function capCustom() {
     const c = customFind(S.chart2);
     const name = S.local ? "自由選択（断面図・エマグラム）" : "保存された断面図・エマグラム";   // 公開サイトでは新しく作れないので「自由選択」とは出さない
-    return c ? `<b>${name}</b> ｜ ${esc(c.label)} ｜ ${esc(c.model)} 初期値 ${esc(c.initText)} ＋${c.ft}h（作図済みの画像。予報時間とは連動しません）`
+    return c ? `<b>${name}</b> ｜ ${esc(c.label)} ｜ ${esc(c.model)} ${c.kind === "sounding" ? "" : "初期値 "}${esc(c.initText)}${c.kind === "sounding" ? "" : ` ＋${c.ft}h`}（作図済みの画像。予報時間とは連動しません）`
              : "<b>自由選択（断面図・エマグラム）</b> ｜ 未作図";
   }
 

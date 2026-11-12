@@ -7,12 +7,18 @@
                     ["東西 35N", 35, 120, 35, 150], ["東西 30N", 30, 120, 30, 150], ["東シナ海→日本海", 30, 125, 40, 135]];
   const PRESET_E = [["稚内", 45.42, 141.68], ["館野", 36.06, 140.13], ["潮岬", 33.45, 135.76],
                     ["福岡", 33.58, 130.38], ["那覇", 26.21, 127.69], ["石垣島", 24.34, 124.16], ["札幌", 43.06, 141.33]];
+  // 気象庁の高層気象観測所（sounding.py の STATIONS と同じ。おおよその位置。地図のクリックで最寄りを選ぶ）
+  const SND = [["47401", "稚内", 45.42, 141.68], ["47412", "札幌", 43.06, 141.33], ["47418", "釧路", 42.98, 144.38], ["47582", "秋田", 39.72, 140.10],
+               ["47600", "輪島", 37.39, 136.90], ["47646", "館野", 36.06, 140.13], ["47678", "八丈島", 33.10, 139.79], ["47971", "父島", 27.09, 142.19],
+               ["47991", "南鳥島", 24.29, 153.98], ["47741", "松江", 35.45, 133.07], ["47778", "潮岬", 33.45, 135.76], ["47807", "福岡", 33.58, 130.38],
+               ["47827", "鹿児島", 31.56, 130.55], ["47909", "名瀬", 28.38, 129.50], ["47918", "石垣島", 24.34, 124.16], ["47945", "南大東島", 25.83, 131.23]];
   let manifest = null;
   const kind = () => document.querySelector("input[name=kind]:checked").value;
 
   function buildPresets() {
     const box = $("presets");
     box.innerHTML = "";
+    if (kind() === "sounding") return;                               // 地点は選択欄と地図のクリックで選ぶ
     if (kind() === "xsection") {
       for (const [n, a, b, c, d] of PRESET_X) {
         const bt = document.createElement("button"); bt.textContent = n;
@@ -31,6 +37,8 @@
     $("rowX").hidden = kind() !== "xsection";
     $("rowOpt").hidden = kind() !== "xsection";                       // 表示要素の選択は断面だけ
     $("rowE").hidden = kind() !== "emagram";
+    $("rowS").hidden = kind() !== "sounding";
+    $("rowModel").hidden = kind() === "sounding";                      // 実況は数値モデルではないので、モデル・初期値・予報時間は使わない
     buildPresets(); clickStep = 0; mapHint(); drawMap();
   }
   function buildInit() {
@@ -83,7 +91,13 @@
     for (const [, la, lo] of PRESET_E.slice(0, 5)) { const [x, y] = toXY(lo, la, w, h); c.fillRect(x - 2, y - 2, 4, 4); }
     // 現在の指定
     c.strokeStyle = "#d02020"; c.fillStyle = "#d02020"; c.lineWidth = 2;
-    if (kind() === "xsection") {
+    if (kind() === "sounding") {                                       // 観測所（選択中は赤の大きい丸）
+      for (const [id, name, la, lo] of SND) {
+        const [x, y] = toXY(lo, la, w, h), on = $("sWmo").value === id;
+        c.fillStyle = on ? "#d02020" : "#1a4fd0"; c.beginPath(); c.arc(x, y, on ? 6 : 3.5, 0, 7); c.fill();
+        c.fillStyle = on ? "#d02020" : "#334"; c.font = "11px sans-serif"; c.fillText(name, x + 6, y - 4);
+      }
+    } else if (kind() === "xsection") {
       const v = ["lat1", "lon1", "lat2", "lon2"].map(val);
       if (v.every(isFinite)) {
         const p = toXY(v[1], v[0], w, h), q = toXY(v[3], v[2], w, h);
@@ -97,7 +111,8 @@
     }
   }
   function mapHint() {
-    $("mapHint").textContent = kind() === "xsection"
+    $("mapHint").textContent = kind() === "sounding" ? "地図の観測所（青い点）をクリックすると、最寄りの観測所を選べます。"
+      : kind() === "xsection"
       ? "地図を2回クリック＝始点→終点（大きい丸が始点）。青の点線・点は公開サイトの固定断面・固定地点。"
       : "地図をクリックすると、その地点のエマグラムを作れます。";
   }
@@ -106,7 +121,11 @@
     const lon = e.lon0 + (ev.clientX - r.left) / r.width * (e.lon1 - e.lon0);
     const lat = e.lat1 - (ev.clientY - r.top) / r.height * (e.lat1 - e.lat0);
     const f = (x) => (Math.round(x * 10) / 10).toString();
-    if (kind() === "xsection") {
+    if (kind() === "sounding") {                                       // 最寄り（緯度経度の単純な距離。経度は緯度で縮める）
+      const k = Math.cos(lat * Math.PI / 180);
+      const best = SND.reduce((a, s) => ((s[2] - lat) ** 2 + ((s[3] - lon) * k) ** 2 < (a[2] - lat) ** 2 + ((a[3] - lon) * k) ** 2 ? s : a));
+      $("sWmo").value = best[0];
+    } else if (kind() === "xsection") {
       if (clickStep === 0) { $("lat1").value = f(lat); $("lon1").value = f(lon); $("lat2").value = f(lat); $("lon2").value = f(lon); }
       else { $("lat2").value = f(lat); $("lon2").value = f(lon); }
       clickStep = 1 - clickStep;
@@ -118,6 +137,7 @@
     $("mapInfo").textContent = `${(e.lat1 - (ev.clientY - r.top) / r.height * (e.lat1 - e.lat0)).toFixed(1)}N ${(e.lon0 + (ev.clientX - r.left) / r.width * (e.lon1 - e.lon0)).toFixed(1)}E`;
   });
   $("ext").onchange = drawMap;
+  $("sWmo").onchange = drawMap;
   window.addEventListener("resize", drawMap);
   for (const id of ["lat1", "lon1", "lat2", "lon2", "lat", "lon"]) $(id).addEventListener("input", drawMap);
   fetch("coast.json").then((r) => r.json()).then((j) => { coast = j.lines; drawMap(); }).catch(() => drawMap());
@@ -126,6 +146,10 @@
     try { manifest = await (await fetch(OUT + "manifest.json", { cache: "no-store" })).json(); } catch (e) {
       $("msg").textContent = "manifest.json を読めません。先に作図してください"; $("msg").className = "err"; return;
     }
+    for (const [id, name] of SND) $("sWmo").add(new Option(`${name}（${id}）`, id));
+    $("sWmo").value = "47918";
+    const d0 = new Date(Date.now() - 24 * 3600 * 1000);                // 既定: 前日（公開まで半日〜1日かかるため）
+    $("sDate").value = `${d0.getUTCFullYear()}-${String(d0.getUTCMonth() + 1).padStart(2, "0")}-${String(d0.getUTCDate()).padStart(2, "0")}`;
     for (const [k, v] of Object.entries(manifest.models || {})) $("model").add(new Option(v.label || k, k));
     $("model").onchange = buildInit;
     buildInit();
@@ -153,7 +177,7 @@
     try { const j = await (await fetch("api/custom/list", { cache: "no-store" })).json(); return Array.isArray(j.items) ? j.items : []; }
     catch (e) { return []; }
   }
-  const histText = (c) => `${c.label}（${c.model} ${c.initText} ＋${c.ft}h）` + (c.published ? "【公開中】" : "");
+  const histText = (c) => `${c.label}（${c.model} ${c.initText}${c.kind === "sounding" ? "" : ` ＋${c.ft}h`}）` + (c.published ? "【公開中】" : "");
   // 結果の画像と「平面図と並べて見る」のリンクを出す
   function showResult(c) {
     const base = c.url.split("/").pop();
@@ -209,14 +233,16 @@
   renderHist();
 
   $("go").onclick = async () => {
-    const q = new URLSearchParams({ kind: kind(), model: $("model").value, init: $("init").value, ft: $("ft").value });
-    for (const id of kind() === "xsection" ? ["lat1", "lon1", "lat2", "lon2"] : ["lat", "lon"]) q.set(id, $(id).value);
+    const q = kind() === "sounding"
+      ? new URLSearchParams({ kind: "sounding", wmo: $("sWmo").value, time: $("sDate").value.replace(/-/g, "") + $("sHour").value, mode: $("sMode").value })
+      : new URLSearchParams({ kind: kind(), model: $("model").value, init: $("init").value, ft: $("ft").value });
+    if (kind() !== "sounding") for (const id of kind() === "xsection" ? ["lat1", "lon1", "lat2", "lon2"] : ["lat", "lon"]) q.set(id, $(id).value);
     if (kind() === "xsection") {                                       // 断面の表示要素（色塗り・等値線・風矢羽）
       q.set("shade", document.querySelector("input[name=shade]:checked").value);
       q.set("contours", [...document.querySelectorAll("input[name=cont]:checked")].map((e) => e.value).join(","));
       q.set("barbs", document.querySelector("input[name=barbs]:checked").value);
     }
-    $("go").disabled = true; $("msg").className = ""; $("msg").textContent = "作図中…（データ取得が入ると1分ほどかかります）";
+    $("go").disabled = true; $("msg").className = ""; $("msg").textContent = kind() === "sounding" ? "取得・作図中…（数秒）" : "作図中…（データ取得が入ると1分ほどかかります）";
     try {
       const r = await fetch("api/custom?" + q);
       const j = await r.json();

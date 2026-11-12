@@ -88,3 +88,40 @@ def test_disk_prune_removes_sidecar_json_too(cdir):
     dg.prune_group("custom")
     assert not old.exists() and not old.with_suffix(".json").exists()                  # 古い方は画像と条件ファイルの両方が消える
     assert new.exists() and new.with_suffix(".json").exists()
+
+
+# ---------- 実況エマグラム（気象庁の観測）を自由選択に載せる
+JMA_HTML = (Path(__file__).resolve().parent / "data" / "jma_47918_2026111121.html").read_text(encoding="utf-8")
+
+
+def test_validate_sounding_accepts_jma_only():
+    p = custom.validate_sounding({"wmo": "47918", "time": "2026111112", "mode": "pt"})
+    assert p == dict(kind="sounding", wmo="47918", time="2026111112", mode="pt")
+    with pytest.raises(custom.CustomError):
+        custom.validate_sounding({"wmo": "47936", "time": "2026111112"})        # 気象庁の観測所ではない（国外はワイオミング＝公開しない）
+    with pytest.raises(custom.CustomError):
+        custom.validate_sounding({"wmo": "47918", "time": "2026111113"})        # 00/06/12/18UTC のみ
+    with pytest.raises(custom.CustomError):
+        custom.validate_sounding({"wmo": "47918", "time": "2999010100"})        # 未来
+
+
+def test_render_sounding_saves_into_custom_list_with_meta_and_reuses(cdir, monkeypatch):
+    import sounding as snd
+    calls = []
+    monkeypatch.setattr(snd, "fetch", lambda dt, wmo, session=None, source="jma": calls.append(source) or snd.parse_jma(JMA_HTML))
+    p = custom.validate_sounding({"wmo": "47918", "time": "2026111112", "mode": "emagram"})
+    out = custom.render_sounding(p)
+    assert out.parent == cdir and out.stat().st_size > 15_000
+    items = custom.list_recent()
+    assert len(items) == 1 and items[0]["kind"] == "sounding" and items[0]["model"] == "気象庁の観測"
+    assert "石垣島" in items[0]["label"] and items[0]["initText"] == "2026-11-11 12Z" and items[0]["ft"] == 0
+    custom.render_sounding(p)
+    assert calls == ["jma"]                                                       # 同じ条件は取得し直さない
+
+
+def test_render_sounding_reports_missing(cdir, monkeypatch):
+    import sounding as snd
+    monkeypatch.setattr(snd, "fetch", lambda *a, **k: None)
+    with pytest.raises(custom.CustomError, match="観測データがありません"):
+        custom.render_sounding(custom.validate_sounding({"wmo": "47918", "time": "2026111112"}))
+    assert not list(cdir.glob("*.png"))

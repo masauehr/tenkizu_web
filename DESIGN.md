@@ -218,3 +218,8 @@ robots.txt の確認結果（上の節）を受けて、**取得元をワイオ�
 - 右の地域に「実況エマグラム（気象庁の観測）」を追加。`chart2` は `地点ID_種類`（例 `47918_emagram`）、観測時刻は別の選択欄（`S.t2`・ハッシュ `t2`）。
 - 観測の図なので左の予報時間・初期値とは連動しない（見出しにもそう書く）。一覧は公開サイトと同じ `output/sounding/manifest.json`（無ければ選択肢に出さない）。
 - 観測時刻を変えて地点が無いときは、その時刻にある先頭の図へ寄せる。
+
+## 自由選択に実況エマグラムを統合（2026-11-12）
+- `/api/custom?kind=sounding&wmo=..&time=YYYYMMDDHH&mode=emagram|pt`（気象庁のみ）。画像は `output/custom/sounding_<時刻>_<地点>_<種類>.png` ＋同名 .json（kind=sounding・mk=""・ft=0）。
+- 数値モデルの `/api/custom`（断面・エマグラム）と同じ一覧・ディスク整理・公開操作に乗せるため、保存先を `output/sounding_custom/` ではなく output/custom/ にした。`/api/sounding`（ワイオミング含む・公開しない）は従来どおり残す。
+- 画面の表示名は `ft` を出さない（観測は予報時間を持たない）。
