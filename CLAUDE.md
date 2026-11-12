@@ -29,6 +29,7 @@ tenkizu の CLI 作図（天気図・断面図・エマグラム）を Web で�
   - **取得元は気象庁**「過去の気象データ検索（高層）」の指定気圧面の観測データ（`https://www.data.jma.go.jp/obd/stats/etrn/upper/view/hourly_usp.php?year=&month=&day=&hour=&atm=&point=<WMO番号>&view=`）。**「時」は日本時間**（00UTC＝9時・12UTC＝21時）。地上＋標準の気圧面（約25層）の高度・気温・相対湿度・風（露点は気温と相対湿度から計算。250hPa より上は湿度が無い）。robots.txt なし。**公共データ利用規約（第1.0版）: 出典と、加工した旨を記載**（図の下端・ページ・manifest の `legal`。外さない）。形式が変わったら `parse_jma` と `tests/data/jma_*.html` を直す。
   - 地点は気象庁の高層気象観測所16地点（`sounding.STATIONS`。**釧路は 47418**。那覇は観測終了）。観測は**欠測する**（表はあるが全部 `///` のこともある＝`SoundingMissing`。取得の失敗ではなく欠測として扱う）。
   - **気象庁の公開は観測から半日〜1日ほど遅れる**（2026-11-12 に確認。今朝の00Zは夕方でも未公開）。取れない時刻・地点は飛ばし（失敗にしない）、次の実行で取り直す。**まだ公開されていない時刻は、先頭の2地点だけ試して見分け、残りは取りにいかない**（`update_sounding.run`）。作成済みは取りにいかない。要求の間隔は空ける（既定2秒）。**アクセスは控えめにする**。
+  - **ワイオミング大学のデータを取得して公開することは断念した**（2026-11-12 ユーザー決定）。公開サイト・Actions は気象庁のデータだけ。
   - **ワイオミング大学**（`source="wyoming"`）は、**配信元の `robots.txt` が `/wsgi` を全ロボットに Disallow している**（2026-11-12 確認。siphon の旧 URL は 404）ので、**自動取得（Actions の定期実行）には使わない**。ローカルで人が操作する1回ずつの取得（`/api/sounding?source=wyoming`・国外の地点も可）だけに残してある。再び自動取得に使うなら、配信元（ldoolman@uwyo.edu）の了解を得てから。
   - 公開は `publish.py --sounding`（`output/sounding` だけを書き換える。画面・モデルの画像には触れない）。公開するのは直近6観測時刻（約3日分・16地点で約14MB）。ローカルで任意に作った図は `output/sounding_custom/`（**公開しない**。`build_site.py` も除外。ワイオミングの図は `_uwyo` 付きの別名）。
 - **モデルの公開（`publish.py --model`）・実況の公開（`--sounding`）は画面ファイル（web/）を上書きしない**（`should_sync_web`。画面の反映は `deploy-web` だけ。公開ブランチが無い初回だけ例外）。起動時の古い `web/` を持つジョブが、画面を直して push した後に終わって古い画面で上書きする競合があった（nwp_chart_web で 2026-11-12 に発生し、同日この repo にも同じ修正を入れた）。
@@ -43,5 +44,5 @@ tenkizu の CLI 作図（天気図・断面図・エマグラム）を Web で�
 - 設計判断・不具合の原因と対処は [DESIGN.md](DESIGN.md) に記録する。運用手順の変更は [PUBLISH.md](PUBLISH.md)。
 
 ## 定期処理（登録済み）
-- GitHub Actions `update-model`: UTC 17〜23時の :30（12Z初期値の時間帯）。`deploy-web`: `web/**` の push で画面だけ反映。`update-sounding`（実況エマグラム。2026-11-12 追加・気象庁のデータ。**現在は無効化中**＝ユーザーの確認後に有効化。有効化は `gh workflow enable update-sounding.yml`）: UTC 2・8・14・20時の :40（6時間おき）。
+- GitHub Actions `update-model`: UTC 17〜23時の :30（12Z初期値の時間帯）。`deploy-web`: `web/**` の push で画面だけ反映。`update-sounding`（実況エマグラム。2026-11-12 追加・気象庁のデータ。**有効化済み**（2026-11-12 にユーザーが許可。止めるときは `gh workflow disable update-sounding.yml`）: UTC 2・8・14・20時の :40（6時間おき）。
 - launchd: `com.masahiro.tenkizu_web_sync`（30分おき）、`com.masahiro.tenkizu_web_gsm`（1時間おきに確認・00/12Z）、`com.masahiro.tenkizu_web_disk`（6時間おき・ディスク制限と通知。2026-11-11 登録済み。ログ `logs/disk_guard.log`）。止める: `launchctl bootout gui/$(id -u)/<Label>`。
