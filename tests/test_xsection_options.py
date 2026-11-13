@@ -100,3 +100,13 @@ def test_custom_validate_ptop():
         assert "上端300hPa" in custom.describe(c)
         with pytest.raises(custom.CustomError):
             custom.validate(kind, "gfs", "2026111018", "0", {**q, "ptop": "50"})
+
+
+def test_custom_validate_pt():
+    """温位エマグラム(pt)は emagram だけ。既定は p に入れず画像名が従来と同じ、指定すると別の画像名・説明になる。"""
+    import custom
+    q = {"lat": "35", "lon": "135"}
+    a = custom.validate("emagram", "gfs", "2026111018", "0", q)
+    b = custom.validate("emagram", "gfs", "2026111018", "0", {**q, "pt": "1"})
+    assert "pt" not in a and b["pt"] == 1 and custom.out_path(a) != custom.out_path(b)
+    assert custom.describe(b).startswith("温位エマグラム") and custom.describe(a).startswith("エマグラム")

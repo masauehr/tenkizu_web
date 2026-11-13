@@ -48,3 +48,11 @@ def test_map_is_drawn_with_a_marker(tmp_path, monkeypatch):
     monkeypatch.setattr(matplotlib.axes.Axes, "plot", spy)
     em.render_emagram(synthetic_F(), datetime(2026, 11, 10, 18), 0, 33.5, 130.5, str(tmp_path / "em2.png"), model="TEST")
     assert plotted == [([130.5], [33.5])]                                     # 要求した地点に●を1つ描いた
+
+
+def test_render_pt_emagram(tmp_path):
+    """温位エマグラム（pt=True）も描画できる。高度設定（上端）との組み合わせも。"""
+    for kw in ({}, {"ptop": 300}):
+        out = tmp_path / f"pt{len(kw)}.png"
+        r = em.render_emagram(synthetic_F(), datetime(2026, 11, 10, 18), 12, 35.0, 135.0, str(out), model="TEST", pt=True, **kw)
+        assert out.exists() and out.stat().st_size > 20_000 and "cape" in r

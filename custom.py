@@ -76,6 +76,8 @@ def validate(kind, model, init_s, ft, q):
         p.update(shade=o["shade"], contours=",".join(o["contours"]), barbs=o["barbs"])
     else:
         p.update(lat=_num(q.get("lat"), "緯度", -15, 89), lon=_num(q.get("lon"), "経度", 0, 360))
+        if str(q.get("pt") or "").lower() in ("1", "true", "on"):      # 温位エマグラム（横軸が温位）。既定のエマグラムは p に入れない（画像名が従来と同じ）
+            p["pt"] = 1
     return p
 
 
@@ -114,7 +116,8 @@ def describe(p):
             import xsection
             base += " ｜ " + xsection.options_text(opts_of(p))
         return base
-    return f"エマグラム ({p['lat']:g}N,{p['lon']:g}E)" + (f" ｜ 上端{p['ptop']}hPa" if "ptop" in p else "")
+    return (f"{'温位エマグラム' if p.get('pt') else 'エマグラム'} ({p['lat']:g}N,{p['lon']:g}E)"
+            + (f" ｜ 上端{p['ptop']}hPa" if "ptop" in p else ""))
 
 
 def opts_of(p):
@@ -251,7 +254,7 @@ def render(p):
         else:
             import emagram
             try:
-                emagram.render_emagram(F, init, p["ft"], p["lat"], p["lon"], str(tmp), model=label, ptop=p.get("ptop", 100))
+                emagram.render_emagram(F, init, p["ft"], p["lat"], p["lon"], str(tmp), model=label, ptop=p.get("ptop", 100), pt=bool(p.get("pt")))
             except ValueError as e:
                 raise CustomError(str(e))
         tmp.replace(out)

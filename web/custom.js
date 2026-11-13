@@ -151,7 +151,7 @@
   const REMOTE_MODELS = ["ecmwf", "gfs", "aifs"];                        // Render の API が作れるモデル
   async function detectLocal() {
     try { const j = await (await fetch("api/custom/list", { cache: "no-store" })).json(); LOCAL = Array.isArray(j.items); } catch (e) { LOCAL = false; }
-    if (!LOCAL && REMOTE) { REMOTE_MODE = true; setupRemote(); }
+    if (!LOCAL && REMOTE) { REMOTE_MODE = true; $("lblPt").hidden = true; setupRemote(); }
     else if (!LOCAL) {                                                  // API が未設定の公開サイト: 作者が公開した図を見るだけ
       $("form").hidden = true; $("disk").hidden = true;
       $("intro").textContent = "作者が公開した断面図・エマグラムです（公開サイトでは新しく作ることはできません）。下のボタンで選んでください。";
@@ -264,6 +264,7 @@
       ? new URLSearchParams({ kind: "sounding", wmo: $("sWmo").value, time: $("sDate").value.replace(/-/g, "") + $("sHour").value, mode: $("sMode").value })
       : new URLSearchParams({ kind: kind(), model: $("model").value, init: $("init").value, ft: $("ft").value, ptop: $("ptop").value });   // ptop: 高度設定（表示する高度の範囲の上端[hPa]）
     if (kind() !== "sounding") for (const id of kind() === "xsection" ? ["lat1", "lon1", "lat2", "lon2"] : ["lat", "lon"]) q.set(id, $(id).value);
+    if (kind() === "emagram" && $("pt").value) q.set("pt", "1");       // 温位エマグラム（ローカルのみ。Render の API は未対応）
     if (kind() === "xsection") {                                       // 断面の表示要素（色塗り・等値線・風矢羽）
       q.set("shade", document.querySelector("input[name=shade]:checked").value);
       q.set("contours", [...document.querySelectorAll("input[name=cont]:checked")].map((e) => e.value).join(","));
