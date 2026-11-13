@@ -118,7 +118,7 @@
     const t = c.pub || c.created || c.ts;
     if (!t) return "";
     const d = new Date(t * 1000), p2 = (n) => String(n).padStart(2, "0");
-    return "　" + (c.pub ? "登録" : "作図") + " " + (d.getMonth() + 1) + "/" + d.getDate() + " " + p2(d.getHours()) + ":" + p2(d.getMinutes());
+    return "　" + (c.pub ? "登録" : "作図") + " " + (d.getMonth() + 1) + "/" + d.getDate() + " " + p2(d.getHours()) + ":" + p2(d.getMinutes()) + (c.pub && c.by ? "（" + c.by + "）" : "");
   };
   const customText = (c) => `${c.label}（${c.model} ${c.initText}${c.kind === "sounding" ? "" : ` ＋${c.ft}h`}）${customStamp(c)}`;
   const chartLabel2 = (region, chart) => {

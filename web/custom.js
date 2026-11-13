@@ -201,7 +201,7 @@
   // 登録した日時（公開した時刻 pub）。無い項目（ローカルで作っただけの図）は作図した時刻を「作図」として出す。ブラウザの時刻帯で表示する
   const pad2 = (n) => String(n).padStart(2, "0");
   const fmtTs = (sec) => { const d = new Date(sec * 1000); return (d.getMonth() + 1) + "/" + d.getDate() + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes()); };
-  const stampText = (c) => (c.pub ? "　登録 " + fmtTs(c.pub) : (c.created || c.ts) ? "　作図 " + fmtTs(c.created || c.ts) : "");
+  const stampText = (c) => (c.pub ? "　登録 " + fmtTs(c.pub) + (c.by ? "（" + c.by + "）" : "") : (c.created || c.ts) ? "　作図 " + fmtTs(c.created || c.ts) : "");
   const histText = (c) => `${c.label}（${c.model} ${c.initText}${c.kind === "sounding" ? "" : ` ＋${c.ft}h`}）` + stampText(c) + (c.published ? "【公開中】" : "");
   // 結果の画像と「平面図と並べて見る」のリンクを出す
   function showResult(c) {
