@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>実況エマグラム（高層ゾンデ）</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  [hidden] { display:none !important; }
+  .bar { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; margin:10px 0; }
+  #view { background:#fff; border:1px solid var(--line); padding:8px; text-align:center; }
+  #view img { display:block; max-width:100%; max-height:calc(100vh - 190px); width:auto; height:auto; margin:0 auto; background:#fff; }
+  #caption { margin:6px 0 0; font-size:13px; color:#334; }
+  #msg { min-height:1.5em; color:#556; }
+  #msg.err { color:#c02020; }
+  .note { color:#556; font-size:12px; }
+  #localBox { margin-top:14px; background:#fff; border:1px solid var(--line); padding:10px 14px; }
+  #localBox h2 { font-size:15px; margin:0 0 6px; }
+  #localBox .row { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; margin:6px 0; }
+  #localBox input[type=text], #localBox input[type=date] { font:inherit; padding:4px 6px; border:1px solid var(--line); border-radius:6px; }
+  #localBox input[type=text] { width:100px; }
+  details.help { margin:10px 0; font-size:13px; color:#334; }
+  details.help summary { cursor:pointer; color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>実況エマグラム（高層ゾンデ）</h1>
+  <a href="./">天気図に戻る</a>
+  <a href="custom.html" id="lnkCustom" hidden>断面図・エマグラム作成（モデル）</a>
+  <span id="updated"></span>
+</header>
+<main>
+  <div class="bar">
+    <label>地点 <select id="stSel"></select></label>
+    <label>観測時刻 <select id="tSel"></select></label>
+    <button id="btnOld" title="1つ前の観測時刻（←）">◀ 前</button>
+    <button id="btnNew" title="1つ後の観測時刻（→）">次 ▶</button>
+    <span class="seg" id="modeBtns" role="group" aria-label="図の種類">
+      <button data-m="emagram" class="on" title="気温・露点・風・持ち上げ気塊・CAPE/CIN・ホドグラフ">エマグラム</button>
+      <button data-m="pt" title="温位・相当温位・飽和相当温位・飽和温位・風">温位エマグラム</button>
+    </span>
+  </div>
+  <div id="msg"></div>
+  <div id="view" hidden><img id="img" alt="実況エマグラム"><p id="caption"></p></div>
+
+  <details class="help">
+    <summary>この図について・見方</summary>
+    <p>気象庁の高層気象観測（ラジオゾンデ。ふつう 00UTC と 12UTC に、気球で上空を観測）の<b>観測値</b>を、気象庁ホームページの「過去の気象データ検索（高層）」から取得して作った図です。数値モデルの予報ではありません（同じ地点のモデルのエマグラムは「断面図・エマグラム作成」で見られます）。</p>
+    <p><b>注意</b>: 観測から公開までに<b>半日〜1日ほど</b>かかるので、最新の観測は出ていないことがあります。データは地上と<b>標準の気圧面（約25層）</b>だけなので、図は詳しい観測（約100層）より粗く、薄い逆転層などは見えません。</p>
+    <p><b>エマグラム</b>: 赤＝気温、緑＝露点温度。2本が近いほど湿っています。灰色の線は、下層の空気を持ち上げたときの気温（持ち上げ気塊）で、赤い線より右（暖かい）の部分が CAPE（不安定のエネルギー）、左の部分が CIN（持ち上げを妨げる量）。右の矢羽は風（kt）、右上のホドグラフは風の高さによる変化（色が高さ）。</p>
+    <p><b>温位エマグラム</b>: 黒＝温位 θ、緑＝相当温位 θe、赤＝飽和相当温位 θes。θe が高度とともに減少していれば、大気は対流不安定です。</p>
+    <p>観測は<b>欠測</b>することがあり、その時刻は一覧に出ません。那覇は観測を終了しています。</p>
+  </details>
+
+  <div id="localBox" hidden>
+    <h2>任意の地点・時刻（ローカルのみ）</h2>
+    <div class="row">
+      <label>データ元 <select id="lSource"><option value="jma">気象庁（既定）</option><option value="wyoming">ワイオミング大学（国外も可）</option></select></label>
+      <label>WMO番号 <input type="text" id="lWmo" list="lStations" value="47918" inputmode="numeric" maxlength="5"></label>
+      <datalist id="lStations"></datalist>
+      <label>日付（UTC） <input type="date" id="lDate"></label>
+      <label>時 <select id="lHour"><option>00</option><option>06</option><option selected>12</option><option>18</option></select> UTC</label>
+      <label>図 <select id="lMode"><option value="emagram">エマグラム</option><option value="pt">温位エマグラム</option></select></label>
+      <button id="lGo">作図</button>
+      <span id="lMsg" class="note"></span>
+    </div>
+    <p class="note">取得して作ります（数秒）。上の公開用の一覧にない時刻も作れます。作った図は公開されません。「気象庁」は気象庁の観測所（上の地点）だけ、「ワイオミング大学」は国外の地点も WMO番号（5桁）で作れます（詳しい観測で約100層。<b>配信元がロボットのアクセスを望んでいないので、人が1回ずつ操作するときだけ</b>使ってください）。</p>
+  </div>
+  <p class="note" id="legal"></p>
+</main>
+<script src="config.js"></script>
+<script src="sounding.js"></script>
+</body>
+</html>

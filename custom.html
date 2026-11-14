@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>断面図・エマグラム（自由選択）</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  [hidden] { display:none !important; }   /* .row の display:flex が hidden 属性に勝たないように */
+  #form { background:#fff; border:1px solid var(--line); padding:12px 16px; display:grid; gap:10px; }
+  #form .row { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; }
+  #form input[type=number] { width:90px; font:inherit; padding:4px 6px; border:1px solid var(--line); border-radius:6px; }
+  #form .presets button { margin:2px 4px 2px 0; font-size:12px; }
+  #msg { min-height:1.5em; color:#556; }
+  #msg.err { color:#c02020; }
+  #result img { display:block; max-width:100%; height:auto; border:1px solid var(--line); background:#fff; margin-top:10px; }
+  .note { color:#556; font-size:12px; }
+  #hist { margin:8px 0; display:flex; flex-wrap:wrap; gap:4px 6px; align-items:center; }
+  #hist .note { width:100%; }
+  #hist button { font-size:12px; }
+  #disk { font-size:12px; color:#556; margin:6px 0; }
+  #disk .warn { color:#c02020; font-weight:bold; }
+  #mapWrap { position:relative; width:100%; max-width:600px; }
+  #map { display:block; width:100%; height:auto; border:1px solid var(--line); background:#eaf4fb; cursor:crosshair; }
+  #mapInfo { position:absolute; left:6px; bottom:6px; background:rgba(255,255,255,.85); padding:1px 6px; font-size:12px; border-radius:4px; pointer-events:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>断面図・エマグラム（自由選択）</h1>
+  <a href="./">天気図に戻る</a>
+  <a href="sounding.html" title="観測（ラジオゾンデ）の実況から作ったエマグラム">実況エマグラム（観測）</a>
+</header>
+<main>
+  <p class="note" id="intro">ローカルサーバーで使えます（公開サイトでは、サーバー（Render）で断面図・エマグラムを作れます）。公開サイトには固定の断面（130E・140E）と主要5地点のエマグラム、作者が公開した図を載せています。
+    データが手元に無い初期値・予報時間は、その場で取得するので<b>1分ほど</b>かかります（ECMWF・GFS。取得したデータは data/ に残ります）。GSM は手元にあるものだけ使えます。<br>「実況エマグラム」は数値モデルではなく気象庁の高層気象観測（16地点・任意の観測日時）で、数秒で作れます。</p>
+  <div id="form">
+    <div class="row">
+      <label><input type="radio" name="kind" value="xsection" checked> 鉛直断面図</label>
+      <label><input type="radio" name="kind" value="emagram"> エマグラム（数値モデル）</label>
+      <label><input type="radio" name="kind" value="sounding"> 実況エマグラム（気象庁の観測）</label>
+    </div>
+    <div class="row" id="rowModel">
+      <label>モデル <select id="model"></select></label>
+      <label>初期値(UTC) <select id="init"></select></label>
+      <label>予報時間 <input type="number" id="ft" value="0" min="0" max="360" step="3"> h</label>
+    </div>
+    <div class="row" id="rowX">
+      <span>始点 緯度 <input type="number" id="lat1" value="45" step="0.5"> 経度 <input type="number" id="lon1" value="130" step="0.5"></span>
+      <span>終点 緯度 <input type="number" id="lat2" value="25" step="0.5"> 経度 <input type="number" id="lon2" value="130" step="0.5"></span>
+    </div>
+    <div class="row" id="rowOpt">
+      <span>色塗り:
+        <label><input type="radio" name="shade" value="none"> なし</label>
+        <label><input type="radio" name="shade" value="div"> 発散</label>
+        <label><input type="radio" name="shade" value="rh" checked> 湿り・乾燥（相対湿度。緑=湿り・黄=乾燥）</label>
+        <label><input type="radio" name="shade" value="omega"> 上昇流（ω）</label></span>
+      <span>等値線:
+        <label><input type="checkbox" name="cont" value="theta" checked> 温位</label>
+        <label><input type="checkbox" name="cont" value="ept" checked> 相当温位</label>
+        <label><input type="checkbox" name="cont" value="wind"> 断面平行風</label></span>
+      <span>風矢羽:
+        <label><input type="radio" name="barbs" value="off"> なし</label>
+        <label><input type="radio" name="barbs" value="back" checked> 背景（薄い灰色）</label>
+        <label><input type="radio" name="barbs" value="front"> 前面（黒）</label></span>
+    </div>
+    <div class="row" id="rowPtop">
+      <label>高度（表示の上端） <select id="ptop">
+        <option value="100" selected>100hPa（約16km・全層）</option>
+        <option value="150">150hPa（約13.5km）</option>
+        <option value="200">200hPa（約12km）</option>
+        <option value="250">250hPa（約10.5km）</option>
+        <option value="300">300hPa（約9.5km）</option>
+        <option value="400">400hPa（約7.5km）</option>
+        <option value="500">500hPa（約5.5km）</option>
+        <option value="600">600hPa（約4km）</option>
+        <option value="700">700hPa（約3km）</option>
+      </select></label>
+      <span class="note">表示する高度の範囲（断面図・エマグラムとも）。数字が小さいほど高い所まで。低くすると下層が大きく見える（エマグラムの CAPE・CIN は全層で計算するので変わらない）。</span>
+    </div>
+    <div class="row" id="rowE" hidden>
+      <span>緯度 <input type="number" id="lat" value="35.7" step="0.1"> 経度 <input type="number" id="lon" value="139.7" step="0.1"></span>
+      <label id="lblPt">図 <select id="pt"><option value="" selected>エマグラム（気温・露点）</option><option value="1">温位エマグラム（θ・θe・θes）</option></select></label>
+    </div>
+    <div class="row" id="rowS" hidden>
+      <label>地点 <select id="sWmo"></select></label>
+      <label>観測日(UTC) <input type="date" id="sDate"></label>
+      <label>時刻 <select id="sHour"><option value="00">00UTC（日本時間9時）</option><option value="12" selected>12UTC（日本時間21時）</option><option value="06">06UTC</option><option value="18">18UTC</option></select></label>
+      <label>図 <select id="sMode"><option value="emagram">エマグラム</option><option value="pt">温位エマグラム</option></select></label>
+      <span class="note">観測から半日〜1日ほどで公開されます。ふつうの観測は 00・12UTC。国外の地点・ワイオミング大学のデータは<a href="sounding.html">実況エマグラムのページ</a>（ローカルのみ・公開しない）で。</span>
+    </div>
+    <div class="row" id="rowKey" hidden>
+      <label>合言葉（公開サイトに載せる・外すときだけ） <input type="password" id="pass" autocomplete="off" size="24" placeholder="渡された合言葉"></label>
+      <span class="note">この端末のブラウザにだけ保存します。作図には要りません。</span>
+    </div>
+    <div class="row presets" id="presets"></div>
+    <div class="row"><label>地図の範囲 <select id="ext"><option value="ea">東アジア（100〜180E・0〜70N）</option><option value="nh">北半球（0〜360E・−15〜90N）</option></select></label>
+      <span class="note" id="mapHint"></span></div>
+    <div id="mapWrap"><canvas id="map"></canvas><div id="mapInfo"></div></div>
+    <div class="row"><button id="go">作図</button><span id="msg"></span></div>
+  </div>
+  <div id="disk"></div>
+  <div id="hist"></div>
+  <div id="result"></div>
+</main>
+<script src="config.js"></script>
+<script src="custom.js"></script>
+</body>
+</html>
