@@ -551,6 +551,7 @@ def render_polar(chart, F, init, ft, outpath, model="", quantize=True):
     title = f"Z{lv},Wind{lv}" + (",T" + str(lv) if cfg.get("temp") else "")
     _caption(fig, [(f"{init:%d%H}", "#1010e0", 16), (f"<{ft}>", "#d020d0", 16), (title, "#7a5a30", 16)],
              y=21 / (H * DPI), fw=W, fh=H)
+    not_official(fig, 21 / (H * DPI))
     fig.savefig(outpath, dpi=DPI)
     plt.close(fig)
     if quantize:
@@ -617,6 +618,12 @@ def _caption(fig, parts, y, fw=None, fh=None):
         x += bb.width / (fw * DPI) + 8 / (fw * DPI)
 
 
+def not_official(fig, y):
+    """下の帯の右端に注意書きを入れる（画像だけ共有されても分かるように。公式予報ではない）。y は図の高さに対する位置。"""
+    fig.text(0.995, y, "公式予報ではありません", color="#555555", fontsize=10,
+             family=["Hiragino Sans", "Noto Sans CJK JP", "Arial Unicode MS", "DejaVu Sans"], va="center", ha="right")
+
+
 def render_chart(chart, region, F, init, ft, outpath, model="", quantize=True):
     """1枚描画して outpath に保存する。init は UTC の datetime。"""
     if CHARTS[chart].get("xsection"):
@@ -665,6 +672,7 @@ def render_chart(chart, region, F, init, ft, outpath, model="", quantize=True):
 
     _caption(fig, [(f"{init:%d%H}", "#1010e0", 17), (f"<{ft}>", "#d020d0", 17),
                    (ctx["title"], "#7a5a30", 17)], y=21 / 760)
+    not_official(fig, 21 / 760)
     fig.savefig(outpath, dpi=DPI)
     plt.close(fig)
     if quantize:

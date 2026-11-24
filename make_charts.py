@@ -154,7 +154,7 @@ def write_manifest(output_dir=None, public_only=False):
                              "license_url": legal["license_url"], "inits": inits}
     manifest = {
         "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "disclaimer": ("本サイトの図は、上記の元データを加工して本アプリが作図したもので、各提供元（ECMWF・NOAA/NCEP・気象庁）の公式な図ではありません。"
+        "disclaimer": ("本サイトの図は、上記の元データを加工して本アプリが作図したもので、各提供元（ECMWF・NOAA/NCEP・気象庁）の公式な図ではなく、いかなる国・機関の公式予報でもありません。"
                        "予報は不確実性を含みます。防災・安全に関わる判断には、気象庁など公的機関の公式情報を使ってください。"
                        "図の内容や利用による損害について、本サイトの作成者は責任を負いません。"),
         "charts": {k: v["label"] for k, v in nwp_charts.CHARTS.items()},

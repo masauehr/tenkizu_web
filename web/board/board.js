@@ -266,7 +266,7 @@
   // 画面に出ているモデルの出典を画面下に常時表示する（モデルごと。ライセンス名はリンク）
   function refreshCredit() {
     const used = [...new Set(visible().map(effModel))].filter((m) => S.m.models[m]);
-    $("credit").innerHTML = used.map((m) => {
+    $("credit").innerHTML = `<b>本サイトの図は、数値予報モデルのデータを加工した参考図であり、いかなる国・機関の公式予報でもありません。</b><br>` + used.map((m) => {
       const md = S.m.models[m];
       return esc(md.credit).replace("CC BY 4.0", `<a href="${md.license_url}" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>`);
     }).join("<br>") + ' <a href="#" id="legalLink">[出典・免責の詳細]</a>';

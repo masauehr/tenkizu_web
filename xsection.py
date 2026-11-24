@@ -294,6 +294,7 @@ def render_xsection(F, init, ft, start, end, outpath, model="", name="", quantiz
     fig.text(0.006, 0.012, f"{model} INIT:{init:%m/%d %H:%M}(UTC)".strip(), fontsize=9, va="bottom")
     nc._caption(fig, [(f"{init:%d%H}", "#1010e0", 16), (f"<{ft}>", "#d020d0", 16),
                       ("CrossSection", "#7a5a30", 16)], y=0.045, fw=W, fh=H)
+    nc.not_official(fig, 0.045)
     fig.savefig(outpath, dpi=nc.DPI)
     plt.close(fig)
     if quantize:

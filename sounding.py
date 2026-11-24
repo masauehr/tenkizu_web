@@ -65,10 +65,10 @@ STATIONS = {
 }
 
 LEGAL = ("出典：気象庁ホームページ「過去の気象データ検索（高層）」の指定気圧面の観測データ（" + JMA_PAGE + "）を加工して作成。"
-         "観測値（地上と標準の気圧面）から、本サイトがエマグラム・温位エマグラムを作図したもので、気象庁の公式な図ではありません。"
+         "観測値（地上と標準の気圧面）から、本サイトがエマグラム・温位エマグラムを作図したもので、気象庁の公式な図ではなく、いかなる国・機関の公式な図・予報でもありません。"
          "標準の気圧面だけなので、ワイオミング大学の詳しい観測（約100層）より粗い図です。")
 LEGAL_WYOMING = ("高層気象観測（ラジオゾンデ）のデータ: University of Wyoming, Department of Atmospheric Science（weather.uwyo.edu）。"
-                 "観測値をそのまま図にしたもので、気象庁の公式な図ではありません。")
+                 "観測値をそのまま図にしたもので、気象庁の公式な図ではなく、いかなる国・機関の公式な図・予報でもありません。")
 FOOTER = {"jma": "出典：気象庁ホームページ（高層気象観測）を加工して作成", "wyoming": "Data: University of Wyoming (weather.uwyo.edu)"}
 
 JP_FONTS = ["Hiragino Sans", "Noto Sans CJK JP", "IPAGothic", "IPAexGothic", "Arial Unicode MS", "DejaVu Sans"]

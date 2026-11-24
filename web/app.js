@@ -293,7 +293,7 @@
   const linkify = (t) => esc(t).replace(/(https?:\/\/[^\s）)]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
   function buildCredit() {
     // 画面上部に常時出す短い表示（比較中は両モデル分）。ライセンス名はリンクにする
-    $("credit").innerHTML = shownModels().map((m) => {
+    $("credit").innerHTML = `<b>本サイトの図は、数値予報モデルのデータを加工した参考図であり、いかなる国・機関の公式予報でもありません。</b><br>` + shownModels().map((m) => {
       const md = S.manifest.models[m];
       return esc(md.credit).replace("CC BY 4.0", `<a href="${md.license_url}" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>`);
     }).join("<br>");
