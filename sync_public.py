@@ -87,7 +87,7 @@ def main():
             make_charts.write_manifest()          # 古い初期値を消したら一覧も更新
         return 0
     for m in MODELS:
-        publish.pull(SimpleNamespace(remote=a.remote, branch=a.branch, model=m))
+        publish.pull(SimpleNamespace(remote=a.remote, branch=a.branch, model=m, sounding=False))
     if a.keep_days > 0:
         prune(a.keep_days)
     make_charts.write_manifest()
