@@ -44,6 +44,6 @@ tenkizu の CLI 作図（天気図・断面図・エマグラム）を Web で�
 - 設計判断・不具合の原因と対処は [DESIGN.md](DESIGN.md) に記録する。運用手順の変更は [PUBLISH.md](PUBLISH.md)。
 
 ## 定期処理（登録済み）
-- GitHub Actions `update-model`: UTC 17〜23時の :30（12Z初期値の時間帯）。`deploy-web`: `web/**` の push で画面だけ反映。`update-sounding`（実況エマグラム。2026-11-12 追加・気象庁のデータ。**有効化済み**（2026-11-12 にユーザーが許可。止めるときは `gh workflow disable update-sounding.yml`）: UTC 2・8・14・20時の :40（6時間おき）。
+- GitHub Actions `update-model`: UTC 17〜23時の :30（12Z初期値の時間帯。`schedule` は間引かれるので**cron-job.org から :30 と :55 にも起動**＝2026-11-25 設定・[CRON_JOB_ORG.md](CRON_JOB_ORG.md)。トークンは nwp_chart_web と共用で期限2027-02-08）。`deploy-web`: `web/**` の push で画面だけ反映。`update-sounding`（実況エマグラム。2026-11-12 追加・気象庁のデータ。**有効化済み**（2026-11-12 にユーザーが許可。止めるときは `gh workflow disable update-sounding.yml`）: UTC 2・8・14・20時の :40（6時間おき）。
 - launchd: `com.masahiro.tenkizu_web_sync`（30分おき）、`com.masahiro.tenkizu_web_gsm`（1時間おきに確認・00/12Z）、`com.masahiro.tenkizu_web_disk`（6時間おき・ディスク制限と通知。2026-11-11 登録済み。ログ `logs/disk_guard.log`）。止める: `launchctl bootout gui/$(id -u)/<Label>`。
 - **温位エマグラム（`pt=1`・2026-11-13）**: モデルのエマグラムに「図」の選択（横軸が温位。`emagram.render_emagram(pt=True)`）。Render の API（nwp_xsection_api）にも同じ実装を別コピーで入れてある（`emagram.py`・`engine.py`）。直すときは両方。画面は `web/custom.js` の `q.set("pt", …)`（ローカルと公開サイトの2か所）。既定（通常のエマグラム）は条件 `p` に入れない（画像名が従来と同じ）。

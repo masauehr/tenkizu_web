@@ -229,3 +229,8 @@ robots.txt の確認結果（上の節）を受けて、**取得元をワイオ�
 - 作図のみ。公開サイトに載せる操作（API の /api/publish・合言葉）は付けない。API の公開先は nwp_chart_web の gh-pages 固定のため。載せたい場合は API に公開先の指定を足す改修（案B）が要る。
 - API は GSM を扱えない／実況エマグラムは API 対象外なので、リモートでは選択肢から外す。API の CORS（ALLOWED_ORIGINS）は github.io のオリジンで判定する。
 - **追記（2026-11-12・案B）**: 公開サイトからの載せる・外すも追加。API に `site`（既定 nwp_chart_web・許可 tenkizu_web）を足し、`custom.js` が `site: "tenkizu_web"` と合言葉で `/api/publish`・`/api/unpublish` を呼ぶ。上限は API の `MAX_ITEMS` に合わせて 20 件。前の「作図のみ」の記述はこの追記で置き換わる。
+
+## ローカル sync の失敗と、update-model の起動を cron-job.org に（2026-11-25）
+- **sync の不具合**: `sync_public.py` が `publish.pull` に渡す引数に `sounding` が無く、`AttributeError` で約2週間（`logs/sync.log` に328回）ローカルへの取り込みが失敗していた。`publish.pull` に `--sounding`（実況エマグラム）を足したとき、呼び出し側を直し忘れたのが原因。`sounding=False` を渡して修正。launchd は終了コード1を返していたが気づきにくい（`launchctl list` の2列目）。
+- **公開側が古くなった原因**: update-model の GitHub `schedule`（UTC 17〜23時の :30）が間引かれ、1日1回（UTC 3時台）しか動かず、12Z分の公開が約12時間遅れた。nwp_chart_web・taiwan_radar_frames と同じ対策として、cron-job.org から `workflow_dispatch` を呼ぶ方式にした（17〜23時の :30 と :55＝1日14回・画面は JST で 2〜8時）。`schedule` は予備として残す。update-model は揃っていなければ何も作らず終わるので、多めに起動しても安全。設定は [CRON_JOB_ORG.md](CRON_JOB_ORG.md)。
+- 判断: トークンは nwp_chart_web 用（`nwp-chart-web-dispatch`）の対象に tenkizu_web を足して共用した。期限は同じ（2027-02-08）。
